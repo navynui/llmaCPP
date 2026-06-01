@@ -24,7 +24,7 @@ services:
     command: -m /models/gemma-4-E4B-it-Q4_K_M.gguf --host 0.0.0.0 --port 8080 -np
       1 --flash-attn on --n-gpu-layers -1 --ctx-size 65536 --ubatch-size 2048 --cache-type-k
       turbo4 --cache-type-v turbo2 --threads 7 --no-mmap --mlock --repeat-penalty
-      1.1  --mmproj /models/mmproj-F16.gguf
+      1.1          --mmproj /models/mmproj-F16.gguf
     healthcheck:
       test:
       - CMD
@@ -44,6 +44,8 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
     - /home/nui/llmaCPP:/llm-server
     - /home/nui/llmaCPP/models:/models
+    - /home/nui/.hermes:/mnt/hermes
+    - /home/nui/.pi:/mnt/pi:rw
     - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
     - /home/nui/dev/ComfyUI/output:/comfyui-output
     - /home/nui/dev/llmWEB/PROMPTS:/app/PROMPTS
