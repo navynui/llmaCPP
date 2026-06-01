@@ -1,0 +1,46 @@
+services:
+  llama-server:
+    build:
+      context: .
+      dockerfile: .devops/cuda.Dockerfile
+      args:
+        CUDA_DOCKER_ARCH: "60" # Optimized for Tesla P100
+    container_name: llm-server
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    command: >
+      -m /models/gemma-4-E4B-it-Q4_K_M.gguf
+      --mtp-head /models/gemma-4-E4B-it-assistant.Q4_K_M.gguf
+      --spec-type mtp
+      --host 0.0.0.0
+      --port 8080
+      -np 1
+      --flash-attn on
+      --n-gpu-layers -1
+      --n-gpu-layers-draft -1
+      --ctx-size 32768
+      --cache-type-k turbo3
+      --cache-type-v turbo3
+      --draft-block-size 3
+      --draft-max 6
+      --threads 8
+      --no-mmap
+      --mlock
+

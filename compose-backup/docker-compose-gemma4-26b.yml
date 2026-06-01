@@ -1,0 +1,42 @@
+services:
+  llama-server:
+    build:
+      context: .
+      dockerfile: .devops/cuda.Dockerfile
+      args:
+        CUDA_DOCKER_ARCH: "60"
+    container_name: llm-server
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "8080:8080"
+    volumes:
+      # ย้อนออกไปหาโฟลเดอร์ models ที่อยู่นอกโฟลเดอร์ source
+      - ../models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # flags สำหรับ Gemma 26B บน VRAM 16GB
+          #--mmproj /models/gemma-4-v-projector.gguf  #this will enable vision capability but we need to lower context size to 8k
+
+    command: >
+          -m /models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf
+          --host 0.0.0.0
+          --port 8080
+          --flash-attn on
+          --n-gpu-layers 27
+          --ctx-size 16384
+          --cache-type-k q4_0
+          --cache-type-v q4_0
+          --threads 8
+          --no-mmap
+          --mlock

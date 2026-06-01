@@ -1,0 +1,46 @@
+services:
+  llama-server:
+    build:
+      context: .
+      dockerfile: .devops/cuda.Dockerfile
+      args:
+        CUDA_DOCKER_ARCH: "60"
+    container_name: llm-server
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    command: >
+      -m /models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf
+      --mtp-head /models/gemma-4-26B-A4B-it-assistant.Q4_K_M.gguf
+      --spec-type mtp
+      --host 0.0.0.0
+      --port 8080
+      -np 1
+      --flash-attn on
+      --n-gpu-layers 25
+      --n-gpu-layers-draft -1
+      --ctx-size 16384
+      --cache-type-k turbo3
+      --cache-type-v turbo3
+      --draft-block-size 3
+      --draft-max 4
+      --threads 8
+      --no-mmap
+      --mlock
+

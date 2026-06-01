@@ -1,0 +1,67 @@
+services:
+  llama-server:
+    image: llama-server:latest
+    container_name: llm-server
+    restart: unless-stopped
+    cap_add:
+    - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+    - 8080:8080
+    volumes:
+    - /home/nui/llmaCPP/models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: 1
+            capabilities:
+            - gpu
+    command: -m /models/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --host
+      0.0.0.0 --port 8080 -np 1 --flash-attn on --n-gpu-layers -1 --ctx-size 65536
+      --ubatch-size 2048 --cache-type-k turbo4 --cache-type-v turbo2 --threads 7 --no-mmap
+      --mlock --repeat-penalty 1.1                 --mmproj /models/mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8080/health
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  llm-manager:
+    build: /home/nui/dev/llmWEB
+    container_name: llm-manager
+    restart: unless-stopped
+    ports:
+    - 8000:8000
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /home/nui/llmaCPP/source:/llm-server
+    - /home/nui/llmaCPP/models:/models
+    - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
+    - /home/nui/dev/ComfyUI/output:/comfyui-output
+    - /home/nui/dev/llmWEB/PROMPTS:/app/PROMPTS
+    environment:
+    - LLM_COMPOSE_DIR=/llm-server
+    - LLM_PROJECT_NAME=source
+    - COMFYUI_HOST=host.docker.internal:8188
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: 1
+            capabilities:
+            - gpu
+            - utility
+    depends_on:
+      llama-server:
+        condition: service_healthy
