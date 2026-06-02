@@ -21,10 +21,10 @@ services:
             count: 1
             capabilities:
             - gpu
-    command: -m /models/Qwen3.6-35B-A3B-UD-IQ3_S.gguf --host 0.0.0.0 --port 8080 -np
-      1 --flash-attn on --n-gpu-layers -1 --ctx-size 65536 --ubatch-size 2048 --cache-type-k
-      turbo4 --cache-type-v turbo2 --threads 7 --no-mmap --mlock --repeat-penalty
-      1.1                   --mmproj /models/Qwen3.6-mmproj-F16.gguf
+    command: -m /models/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --host
+      0.0.0.0 --port 8080 -np 1 --flash-attn on --n-gpu-layers -1 --ctx-size 65536
+      --ubatch-size 2048 --cache-type-k turbo4 --cache-type-v turbo2 --threads 7 --no-mmap
+      --mlock --repeat-penalty 1.1                      --mmproj /models/mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf
     healthcheck:
       test:
       - CMD
