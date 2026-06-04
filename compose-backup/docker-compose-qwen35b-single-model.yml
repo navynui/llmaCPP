@@ -21,19 +21,10 @@ services:
             count: 1
             capabilities:
             - gpu
-    command: >
-      --models-preset /models/models.ini
-      --host 0.0.0.0
-      --port 8080
-      -np 1
-      --flash-attn on
-      --cache-type-k turbo4
-      --cache-type-v turbo2
-      --threads 7
-      --no-mmap
-      --mlock
-      --repeat-penalty 1.1
-      --models-max 2
+    command: -m /models/Qwen3.6-35B-A3B-UD-IQ3_S.gguf --host 0.0.0.0 --port 8080 -np
+      1 --flash-attn on --n-gpu-layers -1 --ctx-size 65536 --ubatch-size 512 --cache-type-k
+      turbo4 --cache-type-v turbo2 --threads 7 --no-mmap --mlock --repeat-penalty
+      1.1                                --mmproj /models/Qwen3.6-mmproj-F16.gguf
     healthcheck:
       test:
       - CMD
