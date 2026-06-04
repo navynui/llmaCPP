@@ -97,6 +97,10 @@ When editing the `llm-manager` service:
 - When experimenting with a new configuration, copy the active `docker-compose.yml` to `compose-backup/` with a descriptive name **before** modifying it.
 - Naming convention: `docker-compose-<model-shortname>[-variant].yml`
 
+### 9. Main and Backup Compose Configs
+- `/home/nui/llmaCPP/docker-compose.yml` is the **main/primary** Docker Compose configuration file.
+- `/home/nui/dev/llmWEB/docker-compose.yml` is a **backup/reference** configuration for the `llm-manager` / `llm-server`.
+
 ---
 
 ## How to Switch Models
