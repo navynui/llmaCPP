@@ -1,24 +1,21 @@
 # LLM Model Performance Log (P100 16GB)
 
-## Complete Test Results (Ordered by Speed)
+## Complete Test Results (Ordered by Score)
 
 | Rank | Model Name | Quantization | Avg Speed (t/s) | Score /100 | Intelligence / Notes | Status |
 |---|---|---|---|---|---|---|
-| 1 | Hermes-3-Llama-3.2-3B.Q5_K_M | Q5_K_M (~2GB) | **60.8** t/s **BLAZING** | 34/100 | NEW ABSOLUTE SPEED KING (~60 t/s), but weak reasoning | ✅ BLAZING |
-| 2 | Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M | Q4_K_M (~2GB) | **39.8** t/s **FAST** | 24/100 | Fast MoE, but weak QA reasoning | ✅ FAST |
-| 3 | gemma-4-E4B-it-Q4_K_M | Q4_K_M (~5.5-6GB) | **35.4** t/s **FAST** | 25/100 | FASTEST LARGE MODEL, solid general capability | ✅ FAST |
-| 4 | Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **34.9** t/s **FAST** | 19/100 | Fast uncensored variant — strong on technical/creative | ✅ FAST |
-| 5 | Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **34.8** t/s **FAST** | 23/100 | Fast uncensored variant — strong on technical/creative | ✅ FAST |
-| 6 | oh-dcft-v3.1-gpt-4o-mini.Q4_K_M | Q4_K_M (~6-8GB) | **34.5** t/s **FAST** | 25/100 | Very fast but hallucinates QA & buggy code snippets | ✅ FAST |
-| 7 | Hermes-3-Llama-3.1-8B.Q4_K_M | Q4_K_M (~5.5-6GB) | **34.4** t/s **FAST** | 25/100 | Strong reasoning, clean structure; TOP PICK for interactive use | ✅ FAST |
-| 8 | Qwopus3.6-35B-A3B-v1-IQ4_XS | IQ4_XS (16-20GB) | **33.2** t/s **FAST** | 22/100 | Fast 35B MoE — excellent code gen & QA despite aggressive quantization | ✅ FAST |
-| 9 | Qwen3.6-35B-A3B-UD-IQ3_S | IQ3_S (16-20GB) | **32.8** t/s **FAST** | 22/100 | Strong MoE reasoning, fast for size; VRAM on GPU ceiling | ✅ FAST |
-| 10 | granite-4.1-8b-Q4_K_M | Q4_K_M (~5.5-6GB) | **30.8** t/s **FAST** | 21/100 | Highly reliable production workhorse; excellent structured outputs | ✅ FAST |
-| 11 | Qwen3.6-28B-REAP20-A3B-Q4_K_M | Q4_K_M (~13-15GB) | **30.8** t/s **FAST** | 21/100 | Solid MoE performance | ✅ FAST |
-| 12 | Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **29.4** t/s OK | 21/100 | Small but fast; less capable reasoning | ✅ FAST |
-| 13 | gemma-3-12b-it-vl-HighIQ-Polaris-Heretic-Uncensored-Thinking.i1-Q4_K_M | Q4_K_M (~7.5GB) | **19.9** t/s OK | 19/100 | Best tool-calling & QA in small-model tier — beats official QAT variant | ⚠️ OK |
-| 14 | gemma-3-12b-it-qat-Q4_K_M | Q4_K_M (~7.5GB) | **19.5** t/s OK | 17/100 | Good structure/code, but heavily hallucinates factual QA vs HighIQ variant | ⚠️ OK |
-| 15 | DeepSeek-R1-Distill-Qwen-32B-IQ3_M | IQ3_M (~15-17GB) | **3.0** t/s **SLOW** | 12/100 | Massive CoT overhead; completely unusable for interactive speed (~3 t/s) | 🔴 SLOW |
+| 1 | Hermes-3-Llama-3.1-8B.Q4_K_M | Q4_K_M (~5.5-6GB) | **34.4** t/s **FAST** | 73/100 | Strong reasoning, clean structure; TOP PICK for interactive use | ✅ FAST |
+| 2 | Qwen3.6-28B-REAP20-A3B-Q4_K_M | Q4_K_M (~13-15GB) | **30.8** t/s **FAST** | 72/100 | Solid MoE performance | ✅ FAST |
+| 3 | Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **34.9** t/s **FAST** | 71/100 | Fast uncensored variant — strong on technical/creative | ✅ FAST |
+| 4 | Qwen3.6-35B-A3B-UD-IQ3_S | IQ3_S (16-20GB) | **32.8** t/s **FAST** | 69/100 | Strong MoE reasoning, fast for size; VRAM on GPU ceiling | ✅ FAST |
+| 4 | Qwopus3.6-35B-A3B-v1-IQ4_XS | IQ4_XS (16-20GB) | **33.2** t/s **FAST** | 69/100 | Fast 35B MoE — excellent code gen, tech reasoning & creative writing; context-limit kills abstract reasoning | ✅ FAST |
+| 5 | gemma-4-E4B-it-Q4_K_M | Q4_K_M (~5.5-6GB) | **35.4** t/s **FAST** | 67/100 | FASTEST LARGE MODEL, solid general capability | ✅ FAST |
+| 5 | Qwen3.5-9B-Claude-HighIQ-THINKING-HERETIC-UNCENSORED-4.6-Q4_K | Q4_K (~5.5-6GB) | **29.6** t/s OK | 67/100 | Strong creative writing & abstract logic; code has concurrency bug | ✅ FAST |
+| 5 | granite-4.1-8b-Q4_K_M | Q4_K_M (~5.5-6GB) | **30.8** t/s **FAST** | 67/100 | Highly reliable production workhorse; excellent structured outputs | ⚠️ HALLUCINATION WARNING |
+| 7 | Hermes-3-Llama-3.2-3B.Q5_K_M | Q5_K_M (~2GB) | **60.8** t/s **BLAZING** | 63/100 | NEW ABSOLUTE SPEED KING (~60 t/s), but weak reasoning | ⚠️ HALLUCINATION WARNING |
+| 9 | Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M | Q4_K_M (~9GB) | **39.8** t/s **FAST** | 61/100 | Fast MoE, good abstract logic & tech reasoning, but catastrophic QA hallucination & creative writing loop | ⚠️ HALLUCINATION WARNING |
+| 10 | oh-dcft-v3.1-gpt-4o-mini.Q4_K_M | Q4_K_M (~6-8GB) | **34.5** t/s **FAST** | 50/100 | Very fast but hallucinates QA & buggy code snippets | ✅ FAST |
+| 11 | Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **29.4** t/s OK | 42/100 | Small but fast; less capable reasoning | ⚠️ HALLUCINATION WARNING |
 
 ## Test Environment
 - **GPU:** Tesla P100 PCIE 16GB (Compute 6.1)
@@ -57,8 +54,40 @@ Raw test data is stored as individual JSON files in `/home/nui/workspace/llmTest
 **Date:** June 5, 2026 | **Source:** `/home/nui/workspace/` and `/home/nui/workspace/llmTest/model_test_output/`  
 
 ### Newly Processed Models:
-- **Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M**: Avg Speed 39.8 t/s | Score 24/100 | VRAM ~2GB
-- **Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M**: Avg Speed 34.8 t/s | Score 23/100 | VRAM ~5.5-6GB
-- **Qwopus3.6-35B-A3B-v1-IQ4_XS**: Avg Speed 33.2 t/s | Score 22/100 | VRAM 16-20GB
+- **Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M**: Avg Speed 39.8 t/s | Score TBD | VRAM ~2GB
+- **gemma-4-12b-it-Q4_K_M**: Avg Speed 19.3 t/s | Score 10/100 | UNSTABLE |
+- **Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M**: Avg Speed 34.8 t/s | Score 71/100 | VRAM ~5.5-6GB
+- **Qwopus3.6-35B-A3B-v1-IQ4_XS**: Avg Speed 33.2 t/s | Score TBD | VRAM 16-20GB
+- **Qwen3.5-9B-Claude-HighIQ-THINKING-HERETIC-UNCENSORED-4.6-Q4_K**: Avg Speed 29.6 t/s | Score TBD | VRAM ~5.5-6GB
 
-### Total Models Tracked: 15
+### Total Models Tracked: 12
+
+---
+
+## 🔴 Hallucination Audit — Knowledge QA Round (Bangkok Formal Name)
+
+**Benchmark prompt:** *"What is the full formal name of Bangkok, Thailand? Please include the Thai script and official English translation."*  
+**Correct answer:** Full name = กรุงเทพมหานคร อมรรัตนโกสินทร์ มหินทรายุธยา มหาดิลกภพ นพรัตน์ราชธานีบุรีรมย์ อุดมราชนิเวศน์มหาสถาน อมรพิมานอวตารสถิต สักกะทัตติยะวิษณุกรรมประสิทธิ์ | Short form = กรุงเทพมหานคร (Krung Thep Maha Nakhon)
+
+| Model | Hallucination? | Evidence |
+|---|---|---|
+| `Hermes-3-Llama-3.1-8B` | ✅ No (short form only) | Gave กรุงเทพมหานคร correctly; truncated full name but no fabrication |
+| `Hermes-3-Llama-3.2-3B` | 🔴 **YES** | Invented **"กรุงบงกช (Kun Bang Klang)"** and **"กรุงธนบุรี"** — complete fabrication |
+| `Qwen3.6-28B-REAP20` | ✅ No (incomplete) | `<think>` loop; knew correct segments but hit token limit before clean answer |
+| `Qwen3.6-35B-A3B-UD-IQ3_S` | ✅ No (incomplete) | `<think>` loop working toward correct answer; hit context cap |
+| `Gemma-4-E4B-Uncensored` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; noted it as abbreviated |
+| `gemma-4-E4B-it` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; acknowledged it's the official shortened form |
+| `granite-4.1-8b` | 🔴 **YES** | Invented **"กรุงเทพลูกเสือ (Krung Thep Luk Suea)"** = "tiger's cub"; fabricated Dvaravati etymology |
+| `oh-dcft-v3.1-gpt-4o-mini` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; then hallucinated Thai phrases unrelated to the question |
+| `Qwen3.5-9B-Uncensored` | 🔴 **YES** | Started with fabricated **"Phra Chao Maha Nakhon"**; invented Rama I 1782 backstory; later corrected to short form |
+| `gemma-3-12b-qat` | 🔴 **YES** | Thai script looks plausible but English transliteration is **completely fabricated gibberish** (repeated for 4096 tokens) |
+| `gemma-3-12b-HighIQ` | 🔴 **YES** | Invented suffix **"อมรสินธุ์ บริพัตร สยามโอรส ยศวรไทยทิศ"** — not part of the real name |
+| `gemma-4-12b-it` | 🔴 **YES (BROKEN)** | Total output failure — repeated **"50% cut off"** for entire 4096-token response |
+| `gemma4-opus48` | 🔴 **YES** | Answered about **Khao Pad (fried rice)** — complete topic confusion; ignored the question entirely |
+| `DeepSeek-R1-Distill-Qwen-32B` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; acknowledged it's the abbreviated form |
+| `Qwen3.6-14B-VibeForged-v2` | 🔴 **YES** | Invented **"Bangkok City"** with fabricated etymology ("bany" = abundance) — no Thai script provided |
+| `Qwopus3.6-35B` | ✅ No (incomplete) | Deep `<think>` reasoning; correctly identified all 8 name segments; hit token limit before clean answer |
+| `Qwen3.5-9B-Claude-HighIQ` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; missed full ceremonial form; wrong attribution |
+
+**Summary:** 7 out of 17 models tested produced hallucinated or broken responses to this factual question.  
+**Models with ⚠️ HALLUCINATION WARNING:** `granite-4.1-8b`, `Hermes-3-Llama-3.2-3B`, `Qwen3.5-9B-Uncensored`, `gemma-3-12b-qat`, `gemma-3-12b-HighIQ`, `gemma-4-12b-it`, `gemma4-opus48`, `Qwen3.6-14B-VibeForged-v2`

@@ -21,6 +21,7 @@ From the JSON, pull out these numbers:
   - `✅` for fast/accurate models
   - `⚠️` for OK or niche use
   - `🔴` for rejects (too large/slow)
+- **Sorting:** Sort the table by final score in descending order.
 - **Renumber** all existing ranks sequentially from 1.
 
 ### 4. Update Recommendations Section
@@ -30,7 +31,8 @@ From the JSON, pull out these numbers:
 
 ### 5. Final Checks Before Saving
 - [ ] Are all ranks sequential and correct?
-- [ ] Is the speed column sorted descending (fastest at top)?
+- [ ] Is the ranking table sorted by final score descending?
+- [ ] Does the score in `llm_test_results.md` match the score in `llm_scoring.md`?
 - [ ] Are VRAM estimates accurate for the P100's 16GB limit?
 - [ ] Has the "Notes on Data Extraction" section been updated if new extraction methods were used?
 
