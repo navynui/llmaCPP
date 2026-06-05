@@ -45,7 +45,7 @@ Reply with:
 ## Quick Reference
 - **P100 VRAM Ceiling:** 16GB hard limit. Anything >15GB needs careful context tuning or aggressive quantization (IQ4_XS, IQ3_S).
 - **Speed Sweet Spot:** >25 t/s is interactive; <10 t/s feels sluggish.
-- **Best Overall Pick (Current):** Qwen28B REAP20-Q4_K_M (~30.7 t/s) or Gemma3 HighIQ-Uncensored (~19.6 t/s for best tool-calling).
+- **Best Overall Pick (Current):** Hermes-3-Llama-3.1-8B.Q4_K_M (~34 t/s) or Granite 4.1 8B Q4_K_M (~29.5 t/s). For speed-only: Hermes-3-Llama-3.2-3B (~60 t/s, ~2GB).
 
 ---
 

@@ -33,7 +33,7 @@ services:
       --no-mmap
       --mlock
       --repeat-penalty 1.1
-      --models-max 2
+      --models-max 1
     healthcheck:
       test:
       - CMD
