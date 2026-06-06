@@ -6,10 +6,11 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 
 ## What This Repository Is
 
-`llmaCPP` is a **personal Docker deployment stack** — not a library or application codebase. It orchestrates two services:
+`llmaCPP` is a **personal Docker deployment stack**. It orchestrates:
 
-1. **`llama-server`** — a llama.cpp inference container exposing an OpenAI-compatible HTTP API on port `8080`
-2. **`llm-manager`** — a web management UI/API built from a separate project (`~/dev/llmWEB`), running on port `8000`
+1. **`llama-server`** — Core llama.cpp inference container (Port `8080`).
+2. **`llm-manager`** — Web UI for server control, chat, MD reading, and ComfyUI interface (Port `8000`).
+3. **`comfyUI`** — Separate image generation container (Port `8188`) integrated via `llm-manager`.
 
 The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything else (`source/`, `models/`, `compose-backup/`) is supporting material.
 
