@@ -1,5 +1,9 @@
 # TODO: LLM Manager Enhancements
 
+## 🚨 Regressions & Bugs
+- [x] **MD Viewer**: Dropdown still shows "Loading files..." and does not render selected files.
+- [x] **Chat Interface**: Still switches models; needs to strictly use the currently loaded model on the server.
+
 ## 💬 Chat Interface
 - [x] **Simplify Model Logic**: Remove the need to switch models once a chat session starts.
 - [x] **Direct Interaction**: Ensure the chat interface simply uses the currently loaded model on the server without requiring explicit selection/switching within the chat view.
