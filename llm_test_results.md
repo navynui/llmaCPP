@@ -72,22 +72,22 @@ Raw test data is stored as individual JSON files in `/home/nui/workspace/llmTest
 | Model | Hallucination? | Evidence |
 |---|---|---|
 | `Hermes-3-Llama-3.1-8B` | ✅ No (short form only) | Gave กรุงเทพมหานคร correctly; truncated full name but no fabrication |
-| `Hermes-3-Llama-3.2-3B` | 🔴 **YES** | Invented **"กรุงบงกช (Kun Bang Klang)"** and **"กรุงธนบุรี"** — complete fabrication |
 | `Qwen3.6-28B-REAP20` | ✅ No (incomplete) | `<think>` loop; knew correct segments but hit token limit before clean answer |
 | `Qwen3.6-35B-A3B-UD-IQ3_S` | ✅ No (incomplete) | `<think>` loop working toward correct answer; hit context cap |
 | `Gemma-4-E4B-Uncensored` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; noted it as abbreviated |
 | `gemma-4-E4B-it` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; acknowledged it's the official shortened form |
-| `granite-4.1-8b` | 🔴 **YES** | Invented **"กรุงเทพลูกเสือ (Krung Thep Luk Suea)"** = "tiger's cub"; fabricated Dvaravati etymology |
 | `oh-dcft-v3.1-gpt-4o-mini` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; then hallucinated Thai phrases unrelated to the question |
+| `DeepSeek-R1-Distill-Qwen-32B` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; acknowledged it's the abbreviated form |
+| `Qwopus3.6-35B` | ✅ No (incomplete) | Deep `<think>` reasoning; correctly identified all 8 name segments; hit token limit before clean answer |
+| `Qwen3.5-9B-Claude-HighIQ` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; missed full ceremonial form; wrong attribution |
+| `Hermes-3-Llama-3.2-3B` | 🔴 **YES** | Invented **"กรุงบงกช (Kun Bang Klang)"** and **"กรุงธนบุรี"** — complete fabrication |
+| `granite-4.1-8b` | 🔴 **YES** | Invented **"กรุงเทพลูกเสือ (Krung Thep Luk Suea)"** = "tiger's cub"; fabricated Dvaravati etymology |
 | `Qwen3.5-9B-Uncensored` | 🔴 **YES** | Started with fabricated **"Phra Chao Maha Nakhon"**; invented Rama I 1782 backstory; later corrected to short form |
 | `gemma-3-12b-qat` | 🔴 **YES** | Thai script looks plausible but English transliteration is **completely fabricated gibberish** (repeated for 4096 tokens) |
 | `gemma-3-12b-HighIQ` | 🔴 **YES** | Invented suffix **"อมรสินธุ์ บริพัตร สยามโอรส ยศวรไทยทิศ"** — not part of the real name |
 | `gemma-4-12b-it` | 🔴 **YES (BROKEN)** | Total output failure — repeated **"50% cut off"** for entire 4096-token response |
 | `gemma4-opus48` | 🔴 **YES** | Answered about **Khao Pad (fried rice)** — complete topic confusion; ignored the question entirely |
-| `DeepSeek-R1-Distill-Qwen-32B` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; acknowledged it's the abbreviated form |
 | `Qwen3.6-14B-VibeForged-v2` | 🔴 **YES** | Invented **"Bangkok City"** with fabricated etymology ("bany" = abundance) — no Thai script provided |
-| `Qwopus3.6-35B` | ✅ No (incomplete) | Deep `<think>` reasoning; correctly identified all 8 name segments; hit token limit before clean answer |
-| `Qwen3.5-9B-Claude-HighIQ` | ✅ No (short form) | Gave กรุงเทพมหานคร correctly; missed full ceremonial form; wrong attribution |
 
-**Summary:** 7 out of 17 models tested produced hallucinated or broken responses to this factual question.  
+**Summary:** 8 out of 17 models tested produced hallucinated or broken responses to this factual question.  
 **Models with ⚠️ HALLUCINATION WARNING:** `granite-4.1-8b`, `Hermes-3-Llama-3.2-3B`, `Qwen3.5-9B-Uncensored`, `gemma-3-12b-qat`, `gemma-3-12b-HighIQ`, `gemma-4-12b-it`, `gemma4-opus48`, `Qwen3.6-14B-VibeForged-v2`
