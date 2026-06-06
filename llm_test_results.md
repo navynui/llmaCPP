@@ -7,15 +7,16 @@
 | 1 | Hermes-3-Llama-3.1-8B.Q4_K_M | Q4_K_M (~5.5-6GB) | **34.4** t/s **FAST** | 73/100 | Strong reasoning, clean structure; TOP PICK for interactive use | ✅ FAST |
 | 2 | Qwen3.6-28B-REAP20-A3B-Q4_K_M | Q4_K_M (~13-15GB) | **30.8** t/s **FAST** | 72/100 | Solid MoE performance | ✅ FAST |
 | 3 | Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **34.9** t/s **FAST** | 71/100 | Fast uncensored variant — strong on technical/creative | ✅ FAST |
+| 4 | Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-IQ3_M | IQ3_M (18-22GB) | **31.8** t/s OK | 69/100 | Balanced MoE — excellent tech reasoning & creative; QA hallucinates Thai names | ✅ FAST |
 | 4 | Qwen3.6-35B-A3B-UD-IQ3_S | IQ3_S (16-20GB) | **32.8** t/s **FAST** | 69/100 | Strong MoE reasoning, fast for size; VRAM on GPU ceiling | ✅ FAST |
 | 4 | Qwopus3.6-35B-A3B-v1-IQ4_XS | IQ4_XS (16-20GB) | **33.2** t/s **FAST** | 69/100 | Fast 35B MoE — excellent code gen, tech reasoning & creative writing; context-limit kills abstract reasoning | ✅ FAST |
-| 5 | gemma-4-E4B-it-Q4_K_M | Q4_K_M (~5.5-6GB) | **35.4** t/s **FAST** | 67/100 | FASTEST LARGE MODEL, solid general capability | ✅ FAST |
-| 5 | Qwen3.5-9B-Claude-HighIQ-THINKING-HERETIC-UNCENSORED-4.6-Q4_K | Q4_K (~5.5-6GB) | **29.6** t/s OK | 67/100 | Strong creative writing & abstract logic; code has concurrency bug | ✅ FAST |
-| 5 | granite-4.1-8b-Q4_K_M | Q4_K_M (~5.5-6GB) | **30.8** t/s **FAST** | 67/100 | Highly reliable production workhorse; excellent structured outputs | ⚠️ HALLUCINATION WARNING |
-| 7 | Hermes-3-Llama-3.2-3B.Q5_K_M | Q5_K_M (~2GB) | **60.8** t/s **BLAZING** | 63/100 | NEW ABSOLUTE SPEED KING (~60 t/s), but weak reasoning | ⚠️ HALLUCINATION WARNING |
-| 9 | Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M | Q4_K_M (~9GB) | **39.8** t/s **FAST** | 61/100 | Fast MoE, good abstract logic & tech reasoning, but catastrophic QA hallucination & creative writing loop | ⚠️ HALLUCINATION WARNING |
-| 10 | oh-dcft-v3.1-gpt-4o-mini.Q4_K_M | Q4_K_M (~6-8GB) | **34.5** t/s **FAST** | 50/100 | Very fast but hallucinates QA & buggy code snippets | ✅ FAST |
-| 11 | Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **29.4** t/s OK | 42/100 | Small but fast; less capable reasoning | ⚠️ HALLUCINATION WARNING |
+| 7 | gemma-4-E4B-it-Q4_K_M | Q4_K_M (~5.5-6GB) | **35.4** t/s **FAST** | 67/100 | FASTEST LARGE MODEL, solid general capability | ✅ FAST |
+| 7 | Qwen3.5-9B-Claude-HighIQ-THINKING-HERETIC-UNCENSORED-4.6-Q4_K | Q4_K (~5.5-6GB) | **29.6** t/s OK | 67/100 | Strong creative writing & abstract logic; code has concurrency bug | ✅ FAST |
+| 7 | granite-4.1-8b-Q4_K_M | Q4_K_M (~5.5-6GB) | **30.8** t/s **FAST** | 67/100 | Highly reliable production workhorse; excellent structured outputs | ⚠️ HALLUCINATION WARNING |
+| 10 | Hermes-3-Llama-3.2-3B.Q5_K_M | Q5_K_M (~2GB) | **60.8** t/s **BLAZING** | 63/100 | NEW ABSOLUTE SPEED KING (~60 t/s), but weak reasoning | ⚠️ HALLUCINATION WARNING |
+| 11 | Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M | Q4_K_M (~9GB) | **39.8** t/s **FAST** | 61/100 | Fast MoE, good abstract logic & tech reasoning, but catastrophic QA hallucination & creative writing loop | ⚠️ HALLUCINATION WARNING |
+| 12 | oh-dcft-v3.1-gpt-4o-mini.Q4_K_M | Q4_K_M (~6-8GB) | **34.5** t/s **FAST** | 50/100 | Very fast but hallucinates QA & buggy code snippets | ✅ FAST |
+| 13 | Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M | Q4_K_M (~5.5-6GB) | **29.4** t/s OK | 42/100 | Small but fast; less capable reasoning | ⚠️ HALLUCINATION WARNING |
 
 ## Test Environment
 - **GPU:** Tesla P100 PCIE 16GB (Compute 6.1)
@@ -51,7 +52,7 @@ Raw test data is stored as individual JSON files in `/home/nui/workspace/llmTest
 ---
 
 ## 📝 Update Log
-**Date:** June 5, 2026 | **Source:** `/home/nui/workspace/` and `/home/nui/workspace/llmTest/model_test_output/`  
+**Date:** June 6, 2026 | **Source:** `/home/nui/workspace/` and `/home/nui/workspace/llmTest/model_test_output/`  
 
 ### Newly Processed Models:
 - **Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M**: Avg Speed 39.8 t/s | Score TBD | VRAM ~2GB
@@ -59,8 +60,9 @@ Raw test data is stored as individual JSON files in `/home/nui/workspace/llmTest
 - **Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M**: Avg Speed 34.8 t/s | Score 71/100 | VRAM ~5.5-6GB
 - **Qwopus3.6-35B-A3B-v1-IQ4_XS**: Avg Speed 33.2 t/s | Score TBD | VRAM 16-20GB
 - **Qwen3.5-9B-Claude-HighIQ-THINKING-HERETIC-UNCENSORED-4.6-Q4_K**: Avg Speed 29.6 t/s | Score TBD | VRAM ~5.5-6GB
+- **Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-IQ3_M**: Avg Speed 31.8 t/s | Score 69/100 | VRAM ~18-22GB
 
-### Total Models Tracked: 12
+### Total Models Tracked: 14
 
 ---
 
