@@ -36,4 +36,5 @@ cd source && docker build -f .devops/cuda.Dockerfile --target server -t llama-se
 ```
 
 ## Configuration Note
-All server runtime parameters (model path, context size, GPU layers) are configured in the `command:` section of `docker-compose.yml`.
+All server runtime parameters (model path, context size, GPU layers) are configured in the `command:` section of `docker-compose.yml`. 
+The system also supports **Router Mode** via `models.ini`, allowing the manager to swap between multiple pre-configured models without recreating the container.
