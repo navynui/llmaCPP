@@ -18,6 +18,10 @@
 ## 🧹 Cleanup
 - [ ] **Remove Quick-load**: Delete "Quick-load shortcuts" and all associated UI components/logic.
 
+## 📄 MD / Document Viewer
+- [ ] **Dropdown Model Selection**: Modify MD tabs to have a dropdown selection for selecting the MD file to read.
+- [ ] **Layout Optimization**: Place the dropdown above the reader area so the rendered text occupies the full width.
+
 ## 🔍 Monitoring & Automation
 - [ ] **Switching Log Monitoring**: Monitor server logs specifically during model switching for critical errors:
     - `ERROR`, `Out of Memory`, `Load fail`, `Wrong architecture`, etc.
