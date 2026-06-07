@@ -9,8 +9,15 @@ The system consists of three main components:
 | Component | Role | Details |
 |---|---|---|
 | **`llama-server`** | Core LLM Server | llama.cpp inference backend exposing OpenAI-compatible API (Port `8080`). |
-| **`llm-manager`** | Web Control Panel | UI for managing the server (start/stop), chat interface, MD file reader, and ComfyUI gateway (Port `8000`). |
+| **`llm-manager`** | Web Control Panel | UI for managing the server (start/stop), chat interface, MD file reader, benchmark suite, and ComfyUI gateway (Port `8000`). |
 | **`comfyUI`** | Image Generation | Third-party container for single/batch image generation and gallery management (Port `8188`). |
+
+## Key Features
+
+- **Model Orchestration**: Seamlessly switch models via Router Mode (`models.ini`).
+- **Intelligence Suite**: Integrated Benchmark module to track model TPS and qualitative scores via SQLite.
+- **Modular Frontend**: SPA architecture split into specialized controllers for stability and scalability.
+- **Image Pipeline**: Integrated ComfyUI interface with batch generation and local gallery management.
 
 ## Repository Layout
 

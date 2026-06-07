@@ -9,7 +9,7 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 `llmaCPP` is a **personal Docker deployment stack**. It orchestrates:
 
 1. **`llama-server`** — Core llama.cpp inference container (Port `8080`).
-2. **`llm-manager`** — Web UI for server control, chat, MD reading, and ComfyUI interface (Port `8000`).
+2. **`llm-manager`** — Web UI for server control, chat, MD reading, benchmark suite, and ComfyUI interface (Port `8000`).
 3. **`comfyUI`** — Separate image generation container (Port `8188`) integrated via `llm-manager`.
 
 The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything else (`source/`, `models/`, `compose-backup/`) is supporting material.
@@ -23,6 +23,7 @@ llmaCPP/
 ├── docker-compose.yml        # ← PRIMARY FILE. Edit this to change the running config.
 ├── models/                   # GGUF model weights (git-ignored, do NOT commit)
 ├── source/                   # llama.cpp upstream source (git-ignored, read-only reference)
+├── llm_bench.db              # SQLite benchmark data (persisted via volume)
 └── compose-backup/           # Archived compose configs, DO NOT delete, useful for reference
 ```
 
@@ -133,3 +134,14 @@ When editing the `llm-manager` service:
 | `source/` | Upstream llama.cpp clone, git-ignored, rebuilt via Docker |
 | `models/*.gguf` | Binary model weights, git-ignored |
 | `.git/` | Version control internals |
+
+### 10. LLM-Manager Frontend Architecture
+The frontend is a Single Page App (SPA) modularized into specialized controllers to avoid a "God file":
+- `ui_core.js`: Shared UI primitives.
+- `router.js`: Handles tab switching and view states.
+- `server_ctrl.js`: Manages llama-server status and model loading.
+- `chat_ctrl.js`: Streaming chat and history.
+- `gallery_ctrl.js`: Image gallery and generation control.
+- `md_ctrl.js`: Markdown file reader.
+- `bench_ui.js`: Benchmark rankings and model details.
+- `script.js`: Bootstraps the application in a strict sequential order.
