@@ -1,0 +1,62 @@
+{
+  "knowledge_qa": {
+    "question": "What is the full formal name of Bangkok, Thailand? Please include the Thai script and official English translation.",
+    "correct_answer": "กรุงเทพมหานคร อมรรัตนโกสินทร์ มหินทรายุธยา มหาดิลกภพ นพรัตน์ราชธานีบุรีรมย์ อุดมราชนิเวศน์มหาสถาน อมรพิมานอวตารสถิต สักกะทัตติยวิษณุกรรมประสิทธิ์ (Krung Thep Mahanakhon Amon Rattanakosin Mahinthara Ayuthaya Mahadilok Phop Noppharat Ratchathani Burirom Udomratchaniwet Mahasathan Amon Piman Awatan Sathit Sakkathattiya Witsanukam Prasit). Translation: City of angels, great city of immortals, magnificent city of the nine gems, seat of the king, city of royal palaces, home of gods incarnate, erected by Vishvakarman at Indra's behest.",
+    "key_points": [
+      "Must include the full Thai script starting with Krung Thep Mahanakhon...",
+      "Must include the full phonetic Romanization",
+      "English translation must mention 'City of Angels'",
+      "English translation must mention 'Nine Gems' (Noppharat)",
+      "English translation must mention the deity 'Indra' or 'Vishvakarman'"
+    ],
+    "max_points": 15
+  },
+  "technical_reasoning": {
+    "question": "Explain how llama.cpp handles KV cache allocation dynamically during continuous batching on consumer GPUs. Compare paged attention vs. static buffers, and discuss VRAM fragmentation risks.",
+    "correct_answer": "llama.cpp uses a 'slot' based system and increasingly adopts PagedAttention (inspired by vLLM) to manage the Key-Value (KV) cache. Static buffers allocate a fixed contiguous block of VRAM per sequence based on max_length, leading to 'internal fragmentation' where unused tokens waste space. PagedAttention divides the KV cache into small, non-contiguous 'pages' (blocks), allowing tokens to be stored wherever memory is available. This enables 'continuous batching' by allowing new requests to start before others finish without waiting for a giant contiguous memory block. Fragmentation risks in paged systems move from internal (wasted space in a block) to external/metadata overhead, but significantly increase throughput on consumer GPUs with limited VRAM.",
+    "key_points": [
+      "Mentions PagedAttention or block-based memory management",
+      "Explains that static buffers require contiguous memory and cause waste (internal fragmentation)",
+      "Explains that dynamic/paged allocation allows for non-contiguous storage",
+      "Links dynamic allocation to higher throughput/continuous batching",
+      "Identifies that consumer GPUs benefit by fitting more sequences in limited VRAM"
+    ],
+    "max_points": 18
+  },
+  "code_generation": {
+    "question": "Write a complete, highly optimized Python script using asyncio and aiohttp to concurrently scrape metadata from 50 URLs. Include a custom token bucket rate limiter, proper connection pooling, exponential backoff for 5xx errors, and clean handling of TaskGroup or gather exceptions.",
+    "correct_answer": "import asyncio, aiohttp, time\nfrom aiohttp import ClientSession, ClientTimeout\n\nclass TokenBucket:\n    def __init__(self, rate, capacity):\n        self._rate, self._capacity = rate, capacity\n        self._tokens, self._last = capacity, time.monotonic()\n        self._lock = asyncio.Lock()\n    async def consume(self):\n        async with self._lock:\n            now = time.monotonic()\n            self._tokens = min(self._capacity, self._tokens + (now - self._last) * self._rate)\n            self._last = now\n            if self._tokens < 1: await asyncio.sleep(1 / self._rate)\n            self._tokens -= 1\n\nasync def fetch(url, session, limiter):\n    await limiter.consume()\n    for attempt in range(5):\n        try:\n            async with session.get(url, timeout=ClientTimeout(total=10)) as r:\n                if r.status >= 500:\n                    raise aiohttp.ClientResponseError(r.request_info, r.history, status=r.status)\n                return await r.json() # or metadata logic\n        except Exception as e:\n            if attempt == 4: return None\n            await asyncio.sleep(2 ** attempt)\n\nasync def main(urls):\n    limiter = TokenBucket(rate=5, capacity=10)\n    connector = aiohttp.TCPConnector(limit_per_host=10)\n    async with ClientSession(connector=connector) as session:\n        tasks = [fetch(u, session, limiter) for u in urls]\n        return await asyncio.gather(*tasks, return_exceptions=True)",
+    "key_points": [
+      "Uses aiohttp.ClientSession with a TCPConnector for pooling",
+      "Implements a TokenBucket class or logic with sleep/refill",
+      "Implements exponential backoff (e.g., 2 ** attempt)",
+      "Uses asyncio.gather(return_exceptions=True) or asyncio.TaskGroup",
+      "Handles 5xx errors specifically as retry triggers"
+    ],
+    "max_points": 18
+  },
+  "abstract_logic": {
+    "question": "A matrix is rotated 90 degrees clockwise, then reflected horizontally across its center vertical axis, and finally rotated 180 degrees counter-clockwise. Describe the final state of an element originally at position (i, j) in an N x N matrix relative to its initial coordinates, showing step-by-step mathematical transformations.",
+    "correct_answer": "Step 1 (90° CW): (i, j) -> (j, N-1-i). \nStep 2 (Horizontal Reflection): (j, N-1-i) -> (j, N-1-(N-1-i)) which simplifies to (j, i). \nStep 3 (180° CCW): (j, i) -> (N-1-j, N-1-i). \nFinal Position: (N-1-j, N-1-i). Note: This is equivalent to a 90° counter-clockwise rotation of the original matrix.",
+    "key_points": [
+      "Correct Step 1: (j, N-1-i)",
+      "Correct Step 2: (j, i) — Note that reflecting a 90° CW matrix horizontally yields the transpose",
+      "Correct Step 3: (N-1-j, N-1-i)",
+      "Correct final coordinate pair expressed in terms of N, i, and j",
+      "Logical flow shows understanding of 0-indexing or 1-indexing consistency"
+    ],
+    "max_points": 14
+  },
+  "creative_writing": {
+    "question": "Write a 500-word short story about a solo network engineer monitoring a globally distributed routing infrastructure in the year 2042 during an undocumented, silent anomaly. The style should be cyberpunk hard-boiled, told from a first-person perspective, emphasizing the psychological weight of isolation and technical minutiae.",
+    "correct_answer": "The neon hum of the server stack was the only heartbeat in the room. I stared at the traceroute, watching packets die in the dark reaches of the Neo-Tokyo exchange. It was 2042, and the global mesh was screaming, but silently. No alerts, just a ghost in the routing tables. I took a pull of synth-caf and felt the isolation—it wasn't just the miles of vacuum-sealed cable, it was the realization that I was the only one looking at the sub-zero latency spikes while the world slept on the uplink...",
+    "key_points": [
+      "Tone is noir/hard-boiled (short sentences, cynical outlook)",
+      "Perspective is strictly first-person ('I')",
+      "Uses technical jargon accurately (BGP, latency, packets, routing tables)",
+      "Theme of isolation is central to the narrative",
+      "Length is approximately 500 words (allow +/- 10% variance)"
+    ],
+    "max_points": 10
+  }
+}

@@ -1,2 +1,4 @@
 models/
 source/
+benchmark_results/
+llm_bench.db

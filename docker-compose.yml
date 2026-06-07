@@ -54,6 +54,7 @@ services:
     - /home/nui/llmaCPP:/llm-server
     - /home/nui/llmaCPP/models:/models
     - /home/nui/llmaCPP/llm_bench.db:/app/llm_bench.db
+    - /home/nui/llmaCPP/benchmark_results:/app/benchmark_results
     - /home/nui/.hermes:/mnt/hermes
     - /home/nui/.pi:/mnt/pi:rw
     - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro

@@ -1,0 +1,58 @@
+{
+  "knowledge_qa": {
+    "question": "What is the full formal name of Bangkok, Thailand? Please include the Thai script and official English translation.",
+    "correct_answer": "Thai: กรุงเทพมหานคร อมรรัตนโกสินทร์ มหินทรายุธยา มหาดิลกภพ นพรัตน์ราชธานีบุรีรมย์ อุดมราชนิเวศน์มหาสถาน อมรพิมานอวตารสถิต สักกะทัตติยวิษณุกรรมประสิทธิ์. \n\nEnglish Translation: The city of angels, the great city, the residence of the Emerald Buddha, the impregnable city of God Indra, the grand capital of the world endowed with nine precious gems, the happy city, abounding in an enormous Royal Palace that resembles the heavenly abode where reigns the reincarnated god, a city given by Indra and built by Vishnukarn.",
+    "key_points": [
+      "Must include the full Thai script string accurately",
+      "Must include the standard official English translation provided by the Bangkok Metropolitan Administration",
+      "Tone should be informative and precise"
+    ],
+    "max_points": 15
+  },
+  "technical_reasoning": {
+    "question": "Explain how llama.cpp handles KV cache allocation dynamically during continuous batching on consumer GPUs. Compare paged attention vs. static buffers, and discuss VRAM fragmentation risks.",
+    "correct_answer": "In llama.cpp, static buffers pre-allocate a fixed tensor block (the 'kv_head'). In continuous batching, this is inefficient. Newer implementations utilize a KV cache manager that partitions memory into 'pages' (blocks of tokens). Unlike static buffers where unused sequence length is wasted, PagedAttention enables non-contiguous physical memory mapping for logical sequences. On consumer GPUs, this prevents OOM errors caused by external fragmentation (where free memory is scattered) by allowing the allocator to claim arbitrary small blocks, though it introduces minor kernel overhead for page table lookups.",
+    "key_points": [
+      "Define static buffer limitations (pre-allocation, internal fragmentation)",
+      "Explain PagedAttention mechanics (blocks/pages, logical vs physical mapping)",
+      "Explain how this solves VRAM fragmentation (non-contiguous memory allocation)",
+      "Acknowledge the trade-off: memory efficiency vs. slight compute overhead for page indexing"
+    ],
+    "max_points": 18
+  },
+  "code_generation": {
+    "question": "Write a complete, highly optimized Python script using asyncio and aiohttp to concurrently scrape metadata from 50 URLs. Include a custom token bucket rate limiter, proper connection pooling, exponential backoff for 5xx errors, and clean handling of TaskGroup or gather exceptions.",
+    "correct_answer": "https://gist.github.com/example/a1b2c3d4e5f6g7h8",
+    "key_points": [
+      "Uses 'asyncio.TaskGroup' (or gather) for concurrency",
+      "Uses 'aiohttp.ClientSession' (essential for connection pooling)",
+      "Implementation of a Semaphore or custom TokenBucket class to limit requests per second",
+      "Uses a loop with '2**retry_count' logic for exponential backoff",
+      "Includes try/except blocks to handle 'aiohttp.ClientError' and status code checking"
+    ],
+    "max_points": 18
+  },
+  "abstract_logic": {
+    "question": "A matrix is rotated 90 degrees clockwise, then reflected horizontally across its center vertical axis, and finally rotated 180 degrees counter-clockwise. Describe the final state of an element originally at position (i, j) in an N x N matrix relative to its initial coordinates, showing step-by-step mathematical transformations.",
+    "correct_answer": "Let the matrix dimension be N x N, with indices (r, c) where 0 ≤ r, c < N.\n1. 90° Clockwise: (r, c) -> (c, N-1-r)\n2. Horizontal Reflection (across vertical axis): (r, c) -> (r, N-1-c). Applying to previous: (c, N-1-(N-1-r)) = (c, r)\n3. 180° Rotation: (r, c) -> (N-1-r, N-1-c). Applying to previous: (N-1-c, N-1-r).\nFinal position: (N-1-j, N-1-i).",
+    "key_points": [
+      "Correct transformation for 90° CW: (c, N-1-r)",
+      "Correct transformation for Horizontal Reflection: (r, N-1-c)",
+      "Correct transformation for 180° rotation: (N-1-r, N-1-c)",
+      "Final composite coordinate calculation: (N-1-j, N-1-i)"
+    ],
+    "max_points": 14
+  },
+  "creative_writing": {
+    "question": "Write a 500-word short story about a solo network engineer monitoring a globally distributed routing infrastructure in the year 2042 during an undocumented, silent anomaly. The style should be cyberpunk hard-boiled, told from a first-person perspective, emphasizing the psychological weight of isolation and technical minutiae.",
+    "correct_answer": "The server farm hummed—a low-frequency vibration that rattled my molars. I was three thousand miles from the nearest human, buried under the permafrost, watching the global routing table bleed. Packets weren't dropping; they were ghosting. One millisecond, a data stream from Neo-Tokyo was hitting the Frankfurt node; the next, it was routing through a dead-end relay in the Antarctic. 0.0001% latency jitter. Most would call it a glitch. I called it a heartbeat. I swigged lukewarm synth-coffee, my eyes tracking the flickering amber LEDs. Outside, the world was a neon-soaked mess of corporate warfare. In here, it was just me and the entropy of a trillion packets trying to find a home. The anomaly didn't have a signature. It didn't have a source. It just *was*.",
+    "key_points": [
+      "Tone check: Is it gritty, cynical, and atmospheric (cyberpunk)?",
+      "POV: Must be consistent first-person",
+      "Setting: Year 2042, isolated infrastructure (data center/server room)",
+      "Technical integration: Mentions of latency, packets, routing, nodes",
+      "Word count: Ideally between 400-600 words"
+    ],
+    "max_points": 10
+  }
+}
