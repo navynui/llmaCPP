@@ -43,9 +43,46 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  llm-manager:
-    build: /home/nui/dev/llmWEB
-    container_name: llm-manager
+
+  # llm-manager:
+  #   build: /home/nui/dev/llmWEB
+  #   container_name: llm-manager
+  #   restart: unless-stopped
+  #   ports:
+  #   - 8000:8000
+  #   volumes:
+  #   - /var/run/docker.sock:/var/run/docker.sock
+  #   - /home/nui/llmaCPP:/llm-server
+  #   - /home/nui/llmaCPP/models:/models
+  #   - /home/nui/llmaCPP/llm_bench.db:/app/llm_bench.db
+  #   - /home/nui/llmaCPP/benchmark_results:/app/benchmark_results
+  #   - /home/nui/.hermes:/mnt/hermes
+  #   - /home/nui/.pi:/mnt/pi:rw
+  #   - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
+  #   - /home/nui/dev/ComfyUI/output:/comfyui-output
+  #   - /home/nui/dev/llmWEB/PROMPTS:/app/PROMPTS
+  #   environment:
+  #   - LLM_COMPOSE_DIR=/llm-server
+  #   - LLM_PROJECT_NAME=llmacpp
+  #   - COMFYUI_HOST=host.docker.internal:8188
+  #   extra_hosts:
+  #   - host.docker.internal:host-gateway
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #         - driver: nvidia
+  #           count: 1
+  #           capabilities:
+  #           - gpu
+  #           - utility
+  #   depends_on:
+  #     llama-server:
+  #       condition: service_healthy
+
+  llm-mobile:
+    build: /home/nui/dev/llmMobile
+    container_name: llm-mobile
     restart: unless-stopped
     ports:
     - 8000:8000
@@ -59,7 +96,7 @@ services:
     - /home/nui/.pi:/mnt/pi:rw
     - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
     - /home/nui/dev/ComfyUI/output:/comfyui-output
-    - /home/nui/dev/llmWEB/PROMPTS:/app/PROMPTS
+    - /home/nui/dev/llmMobile/PROMPTS:/app/PROMPTS
     environment:
     - LLM_COMPOSE_DIR=/llm-server
     - LLM_PROJECT_NAME=llmacpp
