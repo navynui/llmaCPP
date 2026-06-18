@@ -27,8 +27,8 @@ services:
       --port 8080
       -np 1
       --flash-attn on
-      --cache-type-k q8_0
-      --cache-type-v q4_0
+      --cache-type-k turbo4
+      --cache-type-v turbo2
       --threads 7
       --no-mmap
       --mlock
