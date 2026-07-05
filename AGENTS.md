@@ -8,9 +8,10 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 
 `llmaCPP` is a **personal Docker deployment stack**. It orchestrates:
 
-1. **`llama-server`** — Core llama.cpp inference container (Port `8080`).
-2. **`llm-manager`** — Web UI for server control, chat, MD reading, benchmark suite, and ComfyUI interface (Port `8000`).
-3. **`comfyUI`** — Separate image generation container (Port `8188`) integrated via `llm-manager`.
+1. **`llama-server`** — Primary llama.cpp inference container on GPU 0 (Tesla P100, Port `8080`).
+2. **`llama-server-mini`** — Secondary llama.cpp inference container on GPU 1 (GTX 1060, Port `8081`).
+3. **`llm-mobile`** — Web UI for server control, chat, benchmarking, and ComfyUI gateway (Port `8000`).
+4. **`comfyUI`** — Image generation container (Port `8188`) integrated via `llm-mobile`.
 
 The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything else (`source/`, `models/`, `compose-backup/`) is supporting material.
 
@@ -21,7 +22,10 @@ The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything e
 ```
 llmaCPP/
 ├── docker-compose.yml        # ← PRIMARY FILE. Edit this to change the running config.
-├── models/                   # GGUF model weights (git-ignored, do NOT commit)
+├── models/
+│   ├── models.ini            # Primary server model presets (llama-server)
+│   ├── modelg.ini            # Secondary server model presets (llama-server-mini)
+│   └── *.gguf                # Binary model weights (git-ignored)
 ├── source/                   # llama.cpp upstream source (git-ignored, read-only reference)
 ├── llm_bench.db              # SQLite benchmark data (persisted via volume)
 └── compose-backup/           # Archived compose configs, DO NOT delete, useful for reference
@@ -32,23 +36,34 @@ llmaCPP/
 ## Key Rules for Agents
 
 ### 1. `docker-compose.yml` is the source of truth
-- All changes to which model is loaded, runtime parameters, ports, or volumes happen **only** in `docker-compose.yml`.
+- All changes to container configs, runtime parameters, ports, or volumes happen **only** in `docker-compose.yml`.
 - Do **not** modify files inside `source/` — it is an upstream clone and is git-ignored.
 
 ### 2. Models directory is git-ignored
 - `models/` contains large binary GGUF files. Never suggest committing them.
 - When referencing model paths, always use `/models/<filename>.gguf` (as mounted inside the container).
 
-### 3. llama-server command-line flags
-The server is configured entirely via command-line flags in the `command:` key. Common flags:
+### 3. Two llama-server instances
+The stack runs **two** independent `llama-server` containers:
+
+| Service | Container Name | Host Port | GPU | INI Config | Role |
+|---|---|---|---|---|---|
+| `llama-server` | `llm-server` | 8080 | GPU 0 (Tesla P100) | `models.ini` | Primary inference |
+| `llama-server-mini` | `llm-server-mini` | 8081 | GPU 1 (GTX 1060) | `modelg.ini` | Secondary inference |
+
+Both share the `/models` volume. Each has its own `command:` section and model preset file.
+
+### 4. llama-server command-line flags
+Both servers are configured entirely via command-line flags in the `command:` key. Common flags:
 
 | Flag | Purpose |
 |---|---|
-| `-m <path>` | Model file path |
+| `--models-preset <path>` | Path to the model preset INI file (e.g., `/models/models.ini`) |
+| `-m <path>` | Model file path (overridden by INI presets) |
 | `--mmproj <path>` | Multimodal vision projector |
 | `--alias <name>` | Model alias for API calls |
 | `--host 0.0.0.0` | Bind to all interfaces |
-| `--port 8080` | Listening port |
+| `--port 8080` | Listening port (inside container) |
 | `--n-gpu-layers -1` | Offload all layers to GPU |
 | `--ctx-size <n>` | Context window size in tokens |
 | `--flash-attn on` | Enable flash attention |
@@ -58,13 +73,14 @@ The server is configured entirely via command-line flags in the `command:` key. 
 | `--no-mmap` | Disable memory-mapped I/O (needed with `--mlock`) |
 | `--mlock` | Lock model weights in RAM/VRAM |
 | `--repeat-penalty <f>` | Repetition penalty |
-| `--flash-attn on` | Flash attention |
 | `-np <n>` | Number of parallel slots (concurrent requests) |
 | `--n-gpu-layers-draft -1` | For MTP/speculative decoding: offload draft head layers |
 | `--mtp-head <path>` | MTP speculative decoding drafter head |
 | `--spec-type mtp` | Speculative decoding strategy |
 
-### 4. KV cache type guidance
+`llama-server-mini` uses identical flags but targets GPU 1 via `device_ids: ['1']` in the `deploy.resources` section.
+
+### 5. KV cache type guidance
 The `turbo*` types are TurboQuant WHT-rotated low-bit formats available in this build:
 
 | Type | Approx compression | Notes |
@@ -75,23 +91,18 @@ The `turbo*` types are TurboQuant WHT-rotated low-bit formats available in this 
 | `q4_0` | ~4-bit | Standard, broader compatibility |
 | `f16` | 16-bit | No compression, highest quality |
 
-### 5. GPU layer tuning
-- `-1` = all layers on GPU (requires enough VRAM for the full model + KV cache)
-- Partial offload (e.g., `--n-gpu-layers 27`) for large models on 16 GB VRAM
+### 6. GPU device allocation
+- **`llama-server`** uses `device_ids: ['0']` → Tesla P100 (16 GB VRAM)
+- **`llama-server-mini`** uses `device_ids: ['1']` → GTX 1060 (6 GB VRAM)
+- Always verify VRAM budget fits the model + KV cache before changing parameters.
 
-### 6. MTP / Speculative Decoding (Gemma 4)
-The `compose-backup/docker-compose-gemma4-E4B-MTP.yml` shows a working MTP setup:
-- Requires a matching `assistant` GGUF head loaded via `--mtp-head`
-- Use `--spec-type mtp`, `--draft-block-size`, and `--draft-max` to tune
-- Yields ~+30–50% throughput on short prompts
-
-### 7. `llm-manager` environment variables
-When editing the `llm-manager` service:
+### 7. `llm-mobile` environment variables
+When editing the `llm-mobile` service:
 
 | Variable | Meaning |
 |---|---|
 | `LLM_COMPOSE_DIR` | Path **inside the container** to the llmaCPP directory (mapped via volume) |
-| `LLM_PROJECT_NAME` | Docker Compose project name used to control the `llama-server` container |
+| `LLM_PROJECT_NAME` | Docker Compose project name used to control containers |
 | `COMFYUI_HOST` | Host:port for the ComfyUI image generation service |
 
 ### 8. `compose-backup/` is read-only reference
@@ -99,31 +110,36 @@ When editing the `llm-manager` service:
 - When experimenting with a new configuration, copy the active `docker-compose.yml` to `compose-backup/` with a descriptive name **before** modifying it.
 - Naming convention: `docker-compose-<model-shortname>[-variant].yml`
 
-### 9. Main and Backup Compose Configs
-- `/home/nui/llmaCPP/docker-compose.yml` is the **main/primary** Docker Compose configuration file.
-- `/home/nui/dev/llmWEB/docker-compose.yml` is a **backup/reference** configuration for the `llm-manager` / `llm-server`.
-
 ---
 
 ## How to Switch Models
 
-1. Copy the current `docker-compose.yml` to `compose-backup/docker-compose-<description>.yml`
-2. Edit the `command:` key in `docker-compose.yml`:
-   - Change `-m /models/<new-model>.gguf`
-   - Update `--mmproj` if the model family changed
-   - Tune `--n-gpu-layers`, `--ctx-size`, `--cache-type-k/v` for the new model's size
-3. Restart: `docker compose up -d --force-recreate llama-server`
+### Primary Server
+1. Copy current `docker-compose.yml` to `compose-backup/docker-compose-<description>.yml`
+2. Edit `models/models.ini` to add/change model presets
+3. Use the llm-mobile UI to reload the INI and load the new model
+
+### Secondary Server
+1. Edit `models/modelg.ini` to add/change model presets
+2. Use the llm-mobile UI to reload the INI and load the new model on the secondary GPU
+
+To change server-level parameters (threads, cache types, etc.), edit the `command:` section of the respective service in `docker-compose.yml`, then restart:
+```bash
+docker compose up -d --force-recreate llama-server     # Restart primary only
+docker compose up -d --force-recreate llama-server-mini # Restart secondary only
+```
 
 ---
 
 ## Checklist Before Editing `docker-compose.yml`
 
 - [ ] The target model file exists in `models/`
-- [ ] VRAM is sufficient (`--n-gpu-layers -1` requires full model VRAM + KV cache)
+- [ ] VRAM is sufficient for the target GPU (`--n-gpu-layers -1` requires full model VRAM + KV cache)
 - [ ] If using a vision model, `--mmproj` points to the correct projector file
 - [ ] `--mlock` is only used alongside `--no-mmap`
 - [ ] Context size is within GPU memory budget (larger ctx = more KV cache VRAM)
-- [ ] `LLM_PROJECT_NAME` in `llm-manager` matches the Compose project name used when deploying
+- [ ] `LLM_PROJECT_NAME` in `llm-mobile` matches the Compose project name used when deploying
+- [ ] If adding a new GPU-heavy service, verify `device_ids` doesn't conflict with existing allocations
 
 ---
 
@@ -134,14 +150,3 @@ When editing the `llm-manager` service:
 | `source/` | Upstream llama.cpp clone, git-ignored, rebuilt via Docker |
 | `models/*.gguf` | Binary model weights, git-ignored |
 | `.git/` | Version control internals |
-
-### 10. LLM-Manager Frontend Architecture
-The frontend is a Single Page App (SPA) modularized into specialized controllers to avoid a "God file":
-- `ui_core.js`: Shared UI primitives.
-- `router.js`: Handles tab switching and view states.
-- `server_ctrl.js`: Manages llama-server status and model loading.
-- `chat_ctrl.js`: Streaming chat and history.
-- `gallery_ctrl.js`: Image gallery and generation control.
-- `md_ctrl.js`: Markdown file reader.
-- `bench_ui.js`: Benchmark rankings and model details.
-- `script.js`: Bootstraps the application in a strict sequential order.
