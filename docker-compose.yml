@@ -19,8 +19,7 @@ services:
           devices:
           - driver: nvidia
             device_ids: ['0']
-            capabilities:
-            - gpu
+            capabilities: [gpu]
     command: >
       --models-preset /models/models.ini
       --host 0.0.0.0
@@ -35,14 +34,44 @@ services:
       --repeat-penalty 1.1
       --models-max 1
     healthcheck:
-      test:
-      - CMD
-      - curl
-      - -f
-      - http://localhost:8080/health
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+  llama-server-mini:
+      image: llama-server:latest
+      container_name: llm-server-mini
+      restart: unless-stopped
+      cap_add:
+        - IPC_LOCK
+      ulimits:
+        memlock:
+          soft: -1
+          hard: -1
+      ports:
+        - 8081:8080 # Expose on a different host port (8081)
+      volumes:
+        - /home/nui/llmaCPP/models:/models
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                device_ids: ['1'] # Hard locked to GTX 1060
+                capabilities: [gpu]
+      command: >
+        --models-preset /models/modelg.ini
+        --host 0.0.0.0
+        --port 8080
+        -np 1
+        --flash-attn on
+        --cache-type-k turbo4
+        --cache-type-v turbo2
+        --threads 4
+        --no-mmap
+        --mlock
+        --repeat-penalty 1.1
+        --models-max 1
 
   llm-mobile:
     build: /home/nui/dev/llmMobile
