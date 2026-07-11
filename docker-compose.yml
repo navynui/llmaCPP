@@ -33,6 +33,7 @@ services:
       --mlock
       --repeat-penalty 1.1
       --models-max 1
+      --tools all
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
@@ -72,6 +73,7 @@ services:
         --mlock
         --repeat-penalty 1.1
         --models-max 1
+        --tools all
 
   llm-mobile:
     build: /home/nui/dev/llmMobile
@@ -90,6 +92,7 @@ services:
     - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
     - /home/nui/dev/ComfyUI/output:/comfyui-output
     - /home/nui/dev/llmMobile/PROMPTS:/app/PROMPTS
+    - /home/nui/dashboard:/mnt/dashboard:rw
     environment:
     - LLM_COMPOSE_DIR=/llm-server
     - LLM_PROJECT_NAME=llmacpp
