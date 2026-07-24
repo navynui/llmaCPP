@@ -20,6 +20,12 @@ services:
           - driver: nvidia
             device_ids: ['0']
             capabilities: [gpu]
+    environment:
+    - LLAMA_SPEC_MAX_DRAFTING_SLOTS=1
+    - LLAMA_MTP_FAST_BACKEND_SAMPLE=1
+    - LLAMA_MTP_DRAFT_TOP_K=1
+    - LLAMA_MTP_DRAFT_TOP_P=1
+    - LLAMA_MTP_DRAFT_TEMP=1
     command: >
       --models-preset /models/models.ini
       --host 0.0.0.0
