@@ -1,6 +1,135 @@
 # llmaCPP Source Update Log
 
-## Latest Update — 2026-07-26
+## Latest Update — 2026-07-26 (rollback to turboquant-merged-2026-07-06)
+
+**Decision:** Rolled back from `turboquant-merged-2026-07-26` to the
+`turboquant-merged-2026-07-06` baseline after the July 26 merge introduced a
+VRAM memory regression on the P100 (16 GB).
+
+**Problem:** The July 26 merge of 137 TurboQuant fork commits + upstream
+cherry-picks increased VRAM usage to the point where only the E4B model fit
+at ctx=65536 (all other models OOM'd). The July 6 baseline ran all 4 models
+at ctx=65536.
+
+**Root cause of build failure:** The July 6 source failed to compile with CUDA
+12.8.1's nvcc due to a merge artifact in `ggml/src/ggml-cuda/fattn.cu` — a
+missing closing brace that caused 29 template cascade errors.
+
+**Fix applied (fattn.cu brace merge artifact):**
+
+The function `ggml_cuda_flash_attn_ext_mma_f16_switch_ncols2` had a
+duplicated `if constexpr (DKQ <= 256)` block where a single `if/else` was
+intended. The first `if constexpr` was missing its closing `}`, causing the
+function body to never close.
+
+Broken (July 6 source):
+```cpp
+    if constexpr (DKQ <= 256) {
+        if (use_gqa_opt && gqa_ratio > 1) {
+            ggml_cuda_flash_attn_ext_mma_f16_switch_ncols1<DKQ, DV, 2>(ctx, dst);
+            return;
+        }
+
+    if constexpr (DKQ <= 256) {   // ← BUG: missing '}' before this
+        ggml_cuda_flash_attn_ext_mma_f16_switch_ncols1<DKQ, DV, 1>(ctx, dst);
+    } else {
+        GGML_ABORT("fatal error");
+    }
+}  // ← closes outer if but function body stays open
+```
+
+Fixed (restored from July 26 source):
+```cpp
+    if constexpr (DKQ <= 256) {
+        if (use_gqa_opt && gqa_ratio > 1) {
+            ggml_cuda_flash_attn_ext_mma_f16_switch_ncols1<DKQ, DV, 2>(ctx, dst);
+            return;
+        }
+
+        ggml_cuda_flash_attn_ext_mma_f16_switch_ncols1<DKQ, DV, 1>(ctx, dst);
+    } else {
+        GGML_ABORT("fatal error");
+    }
+}  // ← closes function body
+```
+
+**Build:** Compiled successfully with CUDA 12.8.1 + gcc-14, `CUDA_DOCKER_ARCH="60;61"`
+(P100 + GTX 1060). Image: `llama-server:july6-fixed` (7.04 GB), tagged as `latest`.
+
+**Also fixed: `ubatch-size = 2048` → `512`**
+
+Both `models.ini` and `modelg.ini` had `[*]` default `ubatch-size = 2048` which
+causes OOM on P100 at ctx=65536. Reduced to 512.
+
+### VRAM at ctx=65536 with TurboQuant (turbo4/turbo2)
+
+| Model | VRAM (P100) | Headroom |
+|---|---|---|
+| Gemma 4 E4B (Q4_K_XL + MTP) | 5,453 MiB | 10,931 MiB ✅ |
+| Gemma 4 12B (Q4_K_XL + MTP) | 8,761 MiB | 7,623 MiB ✅ |
+| agents-a1 (IQ4_XS + graft) | 15,395 MiB | 989 MiB ✅ |
+| Gemma 4 26B (Q4_K_XL + MTP) | 15,695 MiB | 689 MiB ⚠️ |
+
+All 4 models fit at ctx=65536. The 26B is very tight — avoid concurrent GPU workloads.
+
+### Checklist for future source edits
+
+After any merge or source change, always verify:
+
+```bash
+# Check brace balance in fattn.cu
+cd ~/llmaCPP/source
+awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '{' | wc -l
+awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '}' | wc -l
+# Expected: equal counts (should be 18 each for the switch_ncols2 function)
+
+# Verify template function is properly closed
+# If the function at line 118 is OUTSIDE the template at line 37,
+# everything is fine. If nvcc shows 'closing brace of template definition not found',
+# there's a missing brace.
+```
+
+### Rebuild after source fix
+
+```bash
+cd ~/llmaCPP/source
+docker build \
+  --build-arg CUDA_DOCKER_ARCH="60;61" \
+  -f .devops/cuda.Dockerfile \
+  --target server \
+  -t llama-server:latest .
+
+docker compose up -d --force-recreate llama-server llama-server-mini
+```
+
+**Docker build cache trap:** Use `--no-cache` or `touch` changed files before
+building, because Docker `COPY` preserves timestamps and cmake may skip
+recompilation.
+
+### How VRAM regression was diagnosed
+
+1. Built July 6 source → measured VRAM per model at ctx=65536
+2. Built July 26 source → measured same models, same ctx
+3. Difference: July 26 used ~1.5-4 GB more per model
+4. Suspect commits in the 137-commit merge:
+   - `f5525f7e7` — fix draft model fit vs load inconsistency
+   - `74976e1ae` — CUDA remove -sm row, refactor cuBLAS
+   - `6eddde06a` — CUDA refactor MMQ kernel configuration
+   - `bf2c86ddc` — refactor prompt cache state ownership
+
+No single commit was identified as the sole cause; the regression appears to
+be cumulative across the refactored CUDA MMQ and KV cache changes.
+
+### Active branch
+
+The source is checked out at `turboquant-merged-2026-07-06` (commit `797cf14a2`).
+The `turboquant-merged-2026-07-26` branch is preserved but not deployed.
+If we ever need upstream features from that branch, cherry-pick individual
+commits rather than merging the entire branch.
+
+---
+
+## Previous Update — 2026-07-26 (reverted due to VRAM regression)
 
 Merged the TurboQuant fork (`atomic/feature/turboquant-kv-cache`) onto our
 `turboquant-merged-2026-07-06` branch to bring the source fully up to date with
@@ -251,6 +380,25 @@ cd ~/llmaCPP
 docker compose up -d --force-recreate llama-server llama-server-mini
 ```
 
+**⚠️ After merging, ALWAYS check for fattn.cu brace artifacts:**
+
+The function `ggml_cuda_flash_attn_ext_mma_f16_switch_ncols2` (lines 37-117
+in `ggml/src/ggml-cuda/fattn.cu`) is prone to merge artifacts where a
+duplicated `if constexpr` block loses its closing brace. Verify brace balance:
+
+```bash
+cd ~/llmaCPP/source
+awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '{' | wc -l
+awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '}' | wc -l
+# Must be equal (18 each)
+```
+
+Also run the TurboQuant symbol check after build:
+```bash
+docker run --rm --entrypoint sh llama-server:latest \
+  -c 'nm -D /app/libggml-base.so.0.15.3 2>/dev/null | grep ggml_turbo_wht'
+```
+
 ### Cherry-pick specific upstream features
 
 ```bash
@@ -280,6 +428,23 @@ docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
 docker compose up -d --force-recreate llama-server llama-server-mini
 ```
 
+**⚠️ VRAM regression risk with turboquant-merged-2026-07-26:**
+The `turboquant-merged-2026-07-26` branch introduced a VRAM regression that
+reduced usable context on the P100 (16 GB). Only the E4B model fit at
+ctx=65536; the 12B, agents-a1, and 26B all OOM'd. The
+`turboquant-merged-2026-07-06` baseline runs all 4 models at ctx=65536.
+
+If you must use the July 26 branch (e.g., for a specific upstream feature),
+be prepared to reduce `c = 32768` or lower in INI presets for larger models.
+
+After deploying, always verify VRAM:
+```bash
+nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+curl -s http://localhost:8080/health
+# Expected: HTTP 200, VRAM well below 16384 MiB
+```
+```
+
 ### Known router-mode flags that crash the parent process
 
 These flags are **model-level only** — they must go in the INI preset, not in
@@ -305,12 +470,16 @@ docker build \
 
 | Resource | Path |
 |---|---|
-| Active branch | `source` → `turboquant-merged-2026-07-26` |
+| Active branch | `source` → `turboquant-merged-2026-07-06` (commit `797cf14a2`) |
 | Old HEAD backup | `source/.backup_head` |
 | Compose config | `docker-compose.yml` |
 | Backup compose configs | `compose-backup/` |
+| Deprecated branch (VRAM regression) | `source` → `turboquant-merged-2026-07-26` (not deployed) |
 | Server health | `http://localhost:8080/health` |
 | Mini server health | `http://localhost:8081/health` |
+| VRAM monitor | `nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader` |
+| Backup of pre-rollback compose | `compose-backup/docker-compose-<date>-pre-turboquant-july6.yml` |
+| Backup of July 26 compose | `compose-backup/docker-compose-turboquant-merged-2026-07-26.yml` |
 
 ## Previous Update — 2026-07-06
 
