@@ -58,6 +58,37 @@ cache-type-k = turbo4
 cache-type-v = turbo2
 ```
 
+### Fixed model stuck in "loading" state — missing `model =` in INI sections
+
+**Root cause:** When the INI files were rewritten during the merge, the
+`model = /models/<filename>.gguf` key was removed from every section. Without
+an explicit `model` key, the preset system never sets `LLAMA_ARG_MODEL`, so
+child processes are spawned without `--model`. The child then starts in router
+mode (with 0 available models), creating a deadlock:
+- Parent waits for child to load the model
+- Child waits for parent to send the model
+
+**The section header `[Qwen3-4B-Instruct-2507-Q8_0.gguf]` is NOT automatically
+mapped to `LLAMA_ARG_MODEL`.** The INI parser only maps key-value pairs to CLI
+arguments; the section name is just a preset name.
+
+**Fix:** Added `model = /models/...` to every section in both `models.ini` and
+`modelg.ini`.
+
+**Checklist for future INI edits:**
+```bash
+# Verify every section has a model key
+grep -c '^\\[.*\\]$' models/models.ini  # count sections
+grep -c '^model = ' models/models.ini   # should match section count
+grep -c '^model = ' models/modelg.ini   # should match section count
+```
+
+### Fixed `[*]` default `ubatch-size = 2048` causing OOM on P100
+
+The `[*]` defaults had `ubatch-size = 2048`, which causes OOM on the P100
+(16 GB) with Qwen3-4B at ctx-size 65536. Changed to `ubatch-size = 512` in
+the defaults, with per-model overrides where higher throughput is beneficial.
+
 ### Fixed build issues
 
 - Updated `GGML_OP_COUNT` assertions from 101 → 103 (accommodates TURBO_WHT op +
