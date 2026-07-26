@@ -66,6 +66,126 @@ cache-type-v = turbo2
 - The CUDA build now limits architectures to `60;61` (P100 + GTX 1060) for faster
   Docker builds
 
+### CRITICAL: TurboQuant type traits lost in merge — root cause of SIGSEGV
+
+**The problem:** When merging upstream commits into our TurboQuant fork, several
+TurboQuant-critical code sections were silently lost because upstream doesn't
+have any TURBO type references. The merge tool (git) didn't flag conflicts — it
+just took upstream's version where TURBO entries were absent.
+
+**What was lost (270+ lines across 3 files):**
+
+| File | Lost content | Symptom if missing |
+|---|---|---|
+| `ggml/src/ggml.c` | `type_traits[]` entries for `GGML_TYPE_TURBO2_0`, `TURBO3_0`, `TURBO4_0`, `TQ3_1S`, `TQ4_1S` (indices 42–46) | SIGSEGV on any model load with `--cache-type-k turbo4` (null pointer in `ggml_type_name()` → type_traits out of bounds) |
+| `ggml/src/ggml.c` | `ggml_turbo_wht()` function definition | `undefined symbol: ggml_turbo_wht` at startup |
+| `ggml/src/ggml.c` | `"TURBO_WHT"` in `GGML_OP_NAME[]` array | Wrong op name displayed; shifted array offsets for subsequent ops |
+| `ggml/src/ggml-cpu/ggml-cpu.c` | `type_traits_cpu[]` entries for TURBO types | `undefined symbol` for `quantize_row_turbo*_ref` at link time |
+| `ggml/src/ggml-cpu/ggml-cpu.c` | `GGML_OP_TURBO_WHT` case in `ggml_get_n_tasks()` | `op not implemented: TURBO_WHT` during graph execution |
+| `ggml/src/ggml-cpu/ggml-cpu.c` | `GGML_OP_TURBO_WHT` case in `ggml_compute_forward()` dispatch | TURBO_WHT ops never execute on CPU |
+| `ggml/src/ggml-cpu/ggml-cpu.c` | `ggml_vec_dot_turbo*_f32()` function definitions | `undefined symbol` at link time |
+| `ggml/src/ggml-cpu/ops.cpp` | `ggml_compute_forward_turbo_wht()` function | `undefined symbol: ggml_compute_forward_turbo_wht` at runtime |
+
+**How this manifests at runtime (symptom chain):**
+
+1. Server starts with `--cache-type-k turbo4`
+2. Model loading begins, calls `ggml_type_name(GGML_TYPE_TURBO4_0)`
+3. `type_traits[44]` is uninitialized → returns garbage/null string pointer
+4. Or: `llama-kv-cache.cpp` calls `ggml_get_type_traits(type)->to_float(...)` →
+   null function pointer → **SIGSEGV** (exit code 139)
+5. In router mode, the child process dies with signal 11; parent logs
+   `"instance exited with status -11"`
+
+**How to prevent this in future merges:**
+
+Always run this checklist after any merge:
+
+```bash
+# 1. Check type_traits[] has TURBO entries (indices 42-46 in ggml.c)
+grep -n 'TURBO3_0\|TURBO4_0\|TURBO2_0' ggml/src/ggml.c
+# Expected: 3 entries in the type_traits array (not just in comments or op_params)
+
+# 2. Check ggml_turbo_wht() function exists
+grep -n '^struct ggml_tensor \* ggml_turbo_wht' ggml/src/ggml.c
+# Expected: 1 definition
+
+# 3. Check "TURBO_WHT" in op name array
+grep -n '"TURBO_WHT"' ggml/src/ggml.c
+# Expected: 1 occurrence, after "GATED_DELTA_NET" and before "LIGHTNING_INDEXER"
+
+# 4. Check ggml_compute_forward_turbo_wht in CPU backend
+grep -n 'ggml_compute_forward_turbo_wht' ggml/src/ggml-cpu/ggml-cpu.c
+grep -n 'GGML_OP_TURBO_WHT' ggml/src/ggml-cpu/ggml-cpu.c
+# Expected: 1 in dispatch, 1 in get_n_tasks
+
+# 5. Check ggml_compute_forward_turbo_wht in ops.cpp
+grep -n 'void ggml_compute_forward_turbo_wht' ggml/src/ggml-cpu/ops.cpp
+# Expected: 1 definition
+
+# 6. Build and check symbols exist
+docker run --rm --entrypoint sh llama-server:latest \
+  -c 'nm -D /app/libggml-base.so.0.16.0 2>/dev/null | grep ggml_turbo_wht'
+# Expected: shows the symbol
+
+# 7. Quick smoke test with turbo cache types
+docker run --rm --gpus all --entrypoint /app/llama-server \
+  -v /home/nui/llmaCPP/models:/models \
+  llama-server:latest \
+  --host 0.0.0.0 --port 8099 --no-mmap --no-warmup \
+  --model /models/Qwen3-4B-Instruct-2507-Q8_0.gguf \
+  --n-gpu-layers -1 --cache-type-k turbo4 --cache-type-v turbo2 \
+  --ubatch-size 512 --ctx-size 2048 &
+sleep 20
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/health
+kill %1 2>/dev/null
+# Expected: HTTP 200, not 000
+```
+
+**If any of these are missing:** copy the missing sections from the
+`atomic/feature/turboquant-kv-cache` branch:
+
+```bash
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml.c | sed -n '767,790p'
+# ^ TURBO type_traits entries (insert after [38] in type_traits[])
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml.c | sed -n '6400,6425p'
+# ^ ggml_turbo_wht() function definition
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ggml-cpu.c | sed -n '216,224p'
+# ^ forward declarations for TURBO vec_dot functions
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ggml-cpu.c | sed -n '433,450p'
+# ^ TURBO type_traits_cpu entries
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ops.cpp | sed -n '10948,11050p'
+# ^ ggml_compute_forward_turbo_wht() implementation
+```
+
+**Also verify: `GGML_OP_NAME[]` array in `ggml/src/ggml.c`**
+
+The op name array must have entries at the exact enum index positions. If a name
+is missing (e.g. `"TURBO_WHT"`), all subsequent names shift by one and the op
+name lookup returns the wrong string.
+
+```bash
+# Check the op name order matches enum order in ggml.h
+grep -n 'SOLVE_TRI\|GATED_DELTA_NET\|TURBO_WHT\|LIGHTNING_INDEXER\|DSV4' ggml/include/ggml.h
+grep -n 'SOLVE_TRI\|GATED_DELTA_NET\|TURBO_WHT\|LIGHTNING_INDEXER\|DSV4' ggml/src/ggml.c
+# The order must be identical
+```
+
+**Docker build cache trap:**
+
+After editing source files, Docker's incremental build may NOT recompile changed
+files because cmake in the container sees the object files are newer than the
+source (Docker `COPY` preserves timestamps). Always use `--no-cache` when building
+after merge fixes, or `touch` the changed files before `docker build`:
+
+```bash
+touch ggml/src/ggml.c ggml/src/ggml-cpu/ggml-cpu.c ggml/src/ggml-cpu/ops.cpp
+docker build --no-cache -f .devops/cuda.Dockerfile -t llama-server:latest .
+```
+
 ### Files that needed merge conflict resolution
 
 | File | Resolution |
