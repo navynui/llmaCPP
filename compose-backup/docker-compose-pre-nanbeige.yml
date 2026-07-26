@@ -1,0 +1,120 @@
+services:
+  llama-server:
+    image: llama-server:latest
+    container_name: llm-server
+    restart: unless-stopped
+    cap_add:
+    - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+    - 8080:8080
+    volumes:
+    - /home/nui/llmaCPP/models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
+    environment:
+    - LLAMA_SPEC_MAX_DRAFTING_SLOTS=1
+    - LLAMA_MTP_FAST_BACKEND_SAMPLE=1
+    - LLAMA_MTP_DRAFT_TOP_K=1
+    - LLAMA_MTP_DRAFT_TOP_P=1
+    - LLAMA_MTP_DRAFT_TEMP=1
+    command: >
+      --models-preset /models/models.ini
+      --host 0.0.0.0
+      --port 8080
+      -np 1
+      --flash-attn on
+      --cache-type-k turbo4
+      --cache-type-v turbo2
+      --threads 7
+      --no-mmap
+      --mlock
+      --repeat-penalty 1.1
+      --models-max 1
+      --tools all
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  llama-server-mini:
+      image: llama-server:latest
+      container_name: llm-server-mini
+      restart: unless-stopped
+      cap_add:
+        - IPC_LOCK
+      ulimits:
+        memlock:
+          soft: -1
+          hard: -1
+      ports:
+        - 8081:8080 # Expose on a different host port (8081)
+      volumes:
+        - /home/nui/llmaCPP/models:/models
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                device_ids: ['1'] # Hard locked to GTX 1060
+                capabilities: [gpu]
+      command: >
+        --models-preset /models/modelg.ini
+        --host 0.0.0.0
+        --port 8080
+        -np 1
+        --flash-attn on
+        --cache-type-k turbo4
+        --cache-type-v turbo2
+        --threads 4
+        --no-mmap
+        --mlock
+        --repeat-penalty 1.1
+        --models-max 1
+        --tools all
+
+  llm-mobile:
+    build: /home/nui/dev/llmMobile
+    container_name: llm-mobile
+    restart: unless-stopped
+    ports:
+    - 8000:8000
+    - 8002:8001
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /home/nui/llmaCPP:/llm-server
+    - /home/nui/llmaCPP/models:/models
+    - /home/nui/llmaCPP/llm_bench.db:/app/llm_bench.db
+    - /home/nui/llmaCPP/benchmark_results:/app/benchmark_results
+    - /home/nui/.hermes:/mnt/hermes
+    - /home/nui/.pi:/mnt/pi:rw
+    - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
+    - /home/nui/dev/ComfyUI/output:/comfyui-output
+    - /home/nui/dev/llmMobile/PROMPTS:/app/PROMPTS
+    - /home/nui/dashboard:/mnt/dashboard:rw
+    environment:
+    - LLM_COMPOSE_DIR=/llm-server
+    - LLM_PROJECT_NAME=llmacpp
+    - COMFYUI_HOST=host.docker.internal:8188
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['1']
+            capabilities:
+            - gpu
+            - utility
+    depends_on:
+      llama-server:
+        condition: service_healthy
