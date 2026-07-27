@@ -364,86 +364,488 @@ docker build --no-cache -f .devops/cuda.Dockerfile -t llama-server:latest .
 
 ---
 
-## How to Do Future Updates
 
-### Quick method (update from TurboQuant fork)
+## Update Protocol — Full Lifecycle
+
+This is the standard operating procedure for any source update, merge, or
+cherry-pick. Follow these steps in order. Never skip the pre-flight or
+post-build validation — the cost of catching a regression late is hours of
+debugging.
+
+---
+
+### Step 0: Decide If It's Time to Update
+
+**Before doing anything, run the decision framework in the
+"When to Update" section below.** If the answer is "no" or "not yet",
+stop here. If "yes", proceed.
+
+---
+
+### Step 1: Backup Current State
+
+Before touching source or configs, create rollback anchors:
 
 ```bash
-cd ~/llmaCPP/source
-git fetch atomic --tags --force
-git checkout turboquant-merged-2026-07-26
-git merge atomic/feature/turboquant-kv-cache
-# resolve conflicts (server files → take theirs, TQ files → take theirs)
-git add .
-git commit
 cd ~/llmaCPP
+
+# 1. Tag the current Docker image as a named stable snapshot
+STABLE_TAG="llama-server:stable-$(date +%Y-%m-%d)"
+docker tag llama-server:latest "$STABLE_TAG"
+echo "Tagged: $STABLE_TAG"
+
+# 2. Backup docker-compose.yml
+cp docker-compose.yml "compose-backup/docker-compose-$(date +%Y-%m-%d)-pre-update.yml"
+
+# 3. Record current source HEAD
+cd ~/llmaCPP/source
+git log -1 --oneline > .backup_head
+echo "Backed up HEAD: $(cat .backup_head)"
+
+cd ~/llmaCPP
+```
+
+**To roll back later (see Step 8):**
+```bash
+docker tag llama-server:stable-YYYY-MM-DD llama-server:latest
+cd ~/llmaCPP/source
+git checkout $(cat .backup_head | awk '{print $1}')
+cp compose-backup/docker-compose-YYYY-MM-DD-pre-update.yml docker-compose.yml
 docker compose up -d --force-recreate llama-server llama-server-mini
 ```
 
-**⚠️ After merging, ALWAYS check for fattn.cu brace artifacts:**
+---
 
-The function `ggml_cuda_flash_attn_ext_mma_f16_switch_ncols2` (lines 37-117
-in `ggml/src/ggml-cuda/fattn.cu`) is prone to merge artifacts where a
-duplicated `if constexpr` block loses its closing brace. Verify brace balance:
+### Step 2: Pre-Flight Diff Check
 
-```bash
-cd ~/llmaCPP/source
-awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '{' | wc -l
-awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '}' | wc -l
-# Must be equal (18 each)
-```
-
-Also run the TurboQuant symbol check after build:
-```bash
-docker run --rm --entrypoint sh llama-server:latest \
-  -c 'nm -D /app/libggml-base.so.0.15.3 2>/dev/null | grep ggml_turbo_wht'
-```
-
-### Cherry-pick specific upstream features
+**Before merging anything**, inspect the diff between the target branch and
+your current working branch. This catches structural breakers before they
+reach your build.
 
 ```bash
 cd ~/llmaCPP/source
-# List features NOT in atomic fork
-git log --oneline origin/master --not atomic/feature/turboquant-kv-cache
-# Cherry-pick a specific commit
-git cherry-pick <commit-hash>
-# Fix GGML_OP_COUNT if needed, rebuild
-docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
-  -f .devops/cuda.Dockerfile --target server -t llama-server:latest .
-```
 
-### Full method (if far behind)
-
-```bash
-cd ~/llmaCPP/source
-echo "Current HEAD: $(git rev-parse HEAD)" > .backup_head
+# Ensure all remotes are fresh
 git fetch origin --tags --force
 git fetch atomic --tags --force
-git checkout -b test-merge-$(date +%F) turboquant-merged-2026-07-26
-git merge atomic/feature/turboquant-kv-cache
-# resolve conflicts, then:
-cd ~/llmaCPP
-docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
-  -f .devops/cuda.Dockerfile --target server -t llama-server:latest .
-docker compose up -d --force-recreate llama-server llama-server-mini
+
+echo "=== Diff summary: files changed ==="
+git diff --stat turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache
+
+echo ""
+echo "=== CHECK 1: VRAM-critical areas ==="
+# These files control memory allocation, kernel config, and context sizing
+for f in \
+  ggml/src/ggml-alloc.c \
+  ggml/src/ggml-cuda/ \
+  src/llama-kv-cache.cpp \
+  src/llama-model-loader.cpp \
+  common/arg.cpp \
+  tools/server/server.cpp; do
+  changes=$(git diff turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache -- "$f" | wc -l)
+  if [ "$changes" -gt 0 ]; then
+    echo "  ⚠️  $f — $changes lines changed (potential VRAM impact)"
+  fi
+done
+
+echo ""
+echo "=== CHECK 2: GGML_OP_COUNT / RPC version changes ==="
+git diff turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache -- \
+  ggml/include/ggml.h ggml/include/ggml-rpc.h | grep -E '^[+-].*OP_COUNT|PATCH_VERSION'
+
+echo ""
+echo "=== CHECK 3: New or removed CLI flags ==="
+git diff turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache -- \
+  common/arg.cpp common/common.cpp | grep -E '^[+-].*"--' || echo "  (none detected)"
+
+echo ""
+echo "=== CHECK 4: TURBO type references (must NOT be removed) ==="
+tq_refs=$(git diff turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache -- \
+  ggml/src/ggml.c ggml/src/ggml-cpu/ggml-cpu.c ggml/src/ggml-cpu/ops.cpp | \
+  grep -c 'TURBO' || true)
+echo "  TURBO references changed: $tq_refs lines"
+if [ "$tq_refs" -gt 0 ]; then
+  echo "  ⚠️  TURBO types touched! Run Step 4 audit carefully."
+fi
 ```
 
-**⚠️ VRAM regression risk with turboquant-merged-2026-07-26:**
-The `turboquant-merged-2026-07-26` branch introduced a VRAM regression that
-reduced usable context on the P100 (16 GB). Only the E4B model fit at
-ctx=65536; the 12B, agents-a1, and 26B all OOM'd. The
-`turboquant-merged-2026-07-06` baseline runs all 4 models at ctx=65536.
+**Red flags that mean "do not merge automatically":**
 
-If you must use the July 26 branch (e.g., for a specific upstream feature),
-be prepared to reduce `c = 32768` or lower in INI presets for larger models.
+| Red flag | What to do |
+|---|---|
+| `ggml-alloc.c` has major rewrites | Postpone merge, investigate allocator changes first |
+| `arg.cpp` has new/removed flags | Audit for router-mode incompatibility |
+| `ggml-cuda/` MMQ or fattn refactored | Expect VRAM shift — run Step 6 dry-run test |
+| TURBO references removed in diff | Block merge — restore TURBO types from fork branch |
+| `ggml.h` GGML_OP_COUNT changed | Update assertion in ggml.c and ggml-rpc.h after merge |
 
-After deploying, always verify VRAM:
+---
+
+### Step 3: Merge
+
+Choose the method based on what you're syncing:
+
+#### Quick method (update from TurboQuant fork only)
+
 ```bash
+cd ~/llmaCPP/source
+git checkout turboquant-merged-2026-07-06
+git merge atomic/feature/turboquant-kv-cache
+
+# Resolve conflicts using established patterns:
+#   server files (tools/server/) → take theirs
+#   TQ core files (ggml/src/ggml.c, fattn.cu) → keep TQ version
+#   kv-cache, model-loader → combine (see conflict resolution log above)
+
+git add .
+git commit -m "merge: atomic/feature/turboquant-kv-cache into turboquant-merged"
+```
+
+#### Cherry-pick specific upstream features
+
+```bash
+cd ~/llmaCPP/source
+git checkout turboquant-merged-2026-07-06
+
+# List features NOT in atomic fork
+git log --oneline origin/master --not atomic/feature/turboquant-kv-cache
+
+# Cherry-pick a specific commit
+git cherry-pick <commit-hash>
+
+# If GGML_OP_COUNT changed, update assertions:
+#   ggml/include/ggml-rpc.h
+#   ggml/src/ggml.c
+```
+
+#### Full method (if far behind both upstream and fork)
+
+```bash
+cd ~/llmaCPP/source
+
+# Create a fresh branch for the attempt
+git fetch origin --tags --force
+git fetch atomic --tags --force
+git checkout -b "merge-$(date +%Y-%m-%d)" turboquant-merged-2026-07-06
+git merge atomic/feature/turboquant-kv-cache
+
+# Resolve conflicts, then commit
+```
+
+**After any merge method, immediately verify brace and symbol integrity
+(Step 4) before building.**
+
+---
+
+### Step 4: Post-Merge Symbol & Brace Audit
+
+Run these checks immediately after resolving merge conflicts and before
+building. Every check must pass.
+
+```bash
+cd ~/llmaCPP/source
+
+echo "=== AUDIT 1: fattn.cu brace balance ==="
+OPEN=$(awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '{' | wc -l)
+CLOSE=$(awk 'NR>=38 && NR<118' ggml/src/ggml-cuda/fattn.cu | grep -o '}' | wc -l)
+echo "  braces: $OPEN open, $CLOSE close"
+if [ "$OPEN" -ne "$CLOSE" ]; then
+  echo "  ❌ FAIL — fattn.cu brace mismatch! Fix before building."
+  echo "  See 'Fix applied (fattn.cu brace merge artifact)' above."
+  exit 1
+else
+  echo "  ✅ PASS"
+fi
+
+echo ""
+echo "=== AUDIT 2: TURBO type_traits entries in ggml.c ==="
+grep -c 'TURBO3_0\|TURBO4_0\|TURBO2_0' ggml/src/ggml.c | while read n; do
+  if [ "$n" -lt 3 ]; then
+    echo "  ❌ FAIL — expected >=3 TURBO type_traits entries, found $n"
+    exit 1
+  else
+    echo "  ✅ PASS ($n TURBO entries)"
+  fi
+done
+
+echo ""
+echo "=== AUDIT 3: ggml_turbo_wht() function ==="
+grep -c '^struct ggml_tensor \* ggml_turbo_wht' ggml/src/ggml.c | while read n; do
+  if [ "$n" -eq 0 ]; then
+    echo "  ❌ FAIL — ggml_turbo_wht() missing from ggml.c"
+    exit 1
+  else
+    echo "  ✅ PASS"
+  fi
+done
+
+echo ""
+echo "=== AUDIT 4: TURBO_WHT in op name array ==="
+grep -c '"TURBO_WHT"' ggml/src/ggml.c | while read n; do
+  if [ "$n" -eq 0 ]; then
+    echo "  ❌ FAIL — TURBO_WHT missing from GGML_OP_NAME[]"
+    exit 1
+  else
+    echo "  ✅ PASS"
+  fi
+done
+
+echo ""
+echo "=== AUDIT 5: GGML_OP_NAME[] order vs ggml.h enum ==="
+echo "  Checking op order alignment..."
+H_ENUM=$(grep -n 'SOLVE_TRI\|GATED_DELTA_NET\|TURBO_WHT\|LIGHTNING_INDEXER\|DSV4' ggml/include/ggml.h)
+C_ENUM=$(grep -n 'SOLVE_TRI\|GATED_DELTA_NET\|TURBO_WHT\|LIGHTNING_INDEXER\|DSV4' ggml/src/ggml.c)
+echo "  ggml.h:  $H_ENUM"
+echo "  ggml.c:  $C_ENUM"
+echo "  (Order must match exactly)"
+
+echo ""
+echo "=== AUDIT 6: INI model keys ==="
+SECTIONS=$(grep -c '^\[.*\]$' ~/llmaCPP/models/models.ini)
+MODEL_KEYS=$(grep -c '^model = ' ~/llmaCPP/models/models.ini)
+echo "  models.ini: $SECTIONS sections, $MODEL_KEYS model keys"
+if [ "$SECTIONS" -ne "$MODEL_KEYS" ]; then
+  echo "  ❌ FAIL — missing model = keys in models.ini"
+  exit 1
+fi
+SECTIONS=$(grep -c '^\[.*\]$' ~/llmaCPP/models/modelg.ini)
+MODEL_KEYS=$(grep -c '^model = ' ~/llmaCPP/models/modelg.ini)
+echo "  modelg.ini: $SECTIONS sections, $MODEL_KEYS model keys"
+if [ "$SECTIONS" -ne "$MODEL_KEYS" ]; then
+  echo "  ❌ FAIL — missing model = keys in modelg.ini"
+  exit 1
+fi
+
+echo ""
+echo "All audits passed. Proceed to build."
+```
+
+**If any audit fails:** restore the missing lines from the TurboQuant fork:
+
+```bash
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml.c | sed -n '767,790p'
+# ^ TURBO type_traits entries (insert after [38] in type_traits[])
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml.c | sed -n '6400,6425p'
+# ^ ggml_turbo_wht() function definition
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ggml-cpu.c | sed -n '216,224p'
+# ^ forward declarations for TURBO vec_dot functions
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ggml-cpu.c | sed -n '433,450p'
+# ^ TURBO type_traits_cpu entries
+
+git show atomic/feature/turboquant-kv-cache:ggml/src/ggml-cpu/ops.cpp | sed -n '10948,11050p'
+# ^ ggml_compute_forward_turbo_wht() implementation
+```
+
+---
+
+### Step 5: Build
+
+```bash
+cd ~/llmaCPP/source
+
+# Always use --no-cache after merge to avoid cmake timestamp trap
+docker build \
+  --no-cache \
+  --build-arg CUDA_DOCKER_ARCH="60;61" \
+  -f .devops/cuda.Dockerfile \
+  --target server \
+  -t llama-server:latest .
+```
+
+**Performance tip:** If you're doing iterative development (not a merge),
+skip `--no-cache` for speed:
+```bash
+docker build \
+  --build-arg CUDA_DOCKER_ARCH="60;61" \
+  -f .devops/cuda.Dockerfile \
+  --target server \
+  -t llama-server:latest .
+```
+
+**Docker build cache trap (important):**
+`COPY` preserves timestamps, so cmake may think source files are older than
+compiled objects and skip recompilation. If you edited source files without
+changing the commit (e.g., manual fixups), `touch` them before build:
+
+```bash
+touch ggml/src/ggml.c ggml/src/ggml-cpu/ggml-cpu.c ggml/src/ggml-cpu/ops.cpp
+```
+
+---
+
+### Step 6: Post-Build Symbol Verification
+
+```bash
+# Verify TURBO symbols exist in the compiled library
+docker run --rm --entrypoint sh llama-server:latest \
+  -c 'nm -D /app/libggml-base.so.0.16.0 2>/dev/null | grep ggml_turbo_wht'
+# Expected: shows the symbol (not empty)
+```
+
+---
+
+### Step 7: VRAM Dry-Run Test
+
+Before deploying to production, run a quick smoke test that validates all 4
+models load without OOM at full context. This is the single most important
+validation step — the July 26 regression was only detectable here.
+
+```bash
+# Test each model with a short context first (quick smoke test)
+for model in \
+  /models/Gemma4-E4B-0918-Q4_K_XL.gguf \
+  /models/Gemma4-12B-0918-Q4_K_XL.gguf \
+  /models/agents-a1-Q6_K_L.gguf \
+  /models/Gemma4-26B-0918-Q4_K_XL.gguf; do
+
+  echo "Testing: $(basename $model) at ctx=4096..."
+  docker run --rm --gpus all --entrypoint /app/llama-server \
+    -v /home/nui/llmaCPP/models:/models \
+    llama-server:latest \
+    --host 0.0.0.0 --port 8099 --no-mmap \
+    --model "$model" \
+    --n-gpu-layers -1 \
+    --cache-type-k turbo4 --cache-type-v turbo2 \
+    --ubatch-size 512 --ctx-size 4096 \
+    --no-warmup &
+  SERVER_PID=$!
+  sleep 10
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/health 2>/dev/null)
+  kill $SERVER_PID 2>/dev/null
+  wait $SERVER_PID 2>/dev/null
+
+  if [ "$STATUS" = "200" ]; then
+    echo "  ✅ $(basename $model) — HTTP $STATUS"
+  else
+    echo "  ❌ $(basename $model) — HTTP $STATUS (check VRAM)"
+    nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+    echo "  Aborting deploy."
+    exit 1
+  fi
+done
+
+echo ""
+echo "All models passed smoke test at ctx=4096. Testing full context (65536)..."
+
+# Now test the tightest model (26B) at full context
+model="/models/Gemma4-26B-0918-Q4_K_XL.gguf"
+echo "Testing: $(basename $model) at ctx=65536..."
+docker run --rm --gpus all --entrypoint /app/llama-server \
+  -v /home/nui/llmaCPP/models:/models \
+  llama-server:latest \
+  --host 0.0.0.0 --port 8099 --no-mmap \
+  --model "$model" \
+  --n-gpu-layers -1 \
+  --cache-type-k turbo4 --cache-type-v turbo2 \
+  --ubatch-size 512 --ctx-size 65536 \
+  --no-warmup &
+SERVER_PID=$!
+sleep 30
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/health 2>/dev/null)
+kill $SERVER_PID 2>/dev/null
+wait $SERVER_PID 2>/dev/null
+
+if [ "$STATUS" = "200" ]; then
+  echo "  ✅ 26B at ctx=65536 — HTTP $STATUS"
+else
+  echo "  ❌ 26B at ctx=65536 — HTTP $STATUS (VRAM regression likely)"
+  nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+  echo "  Reduce ctx-size or investigate regression before deploying."
+  exit 1
+fi
+
+echo ""
+echo "✅ All VRAM tests passed. Safe to deploy."
+```
+
+---
+
+### Step 8: Deploy
+
+```bash
+cd ~/llmaCPP
+
+# Tag the new image as a named release
+docker tag llama-server:latest "llama-server:release-$(date +%Y-%m-%d)"
+
+# Update LLM-MOBILE UI with new image reference
+docker compose up -d --force-recreate llama-server llama-server-mini
+
+# Verify both servers are healthy
+sleep 15
+echo "Primary:   $(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health)"
+echo "Secondary: $(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/health)"
+echo ""
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
-curl -s http://localhost:8080/health
-# Expected: HTTP 200, VRAM well below 16384 MiB
 ```
+
+---
+
+### Step 9: Safety Fallback (if something went wrong)
+
+If any step above failed and you need to revert to the previous working state:
+
+```bash
+cd ~/llmaCPP
+
+# 1. Restore the stable Docker image
+#    (you tagged this in Step 1 or during the last successful deploy)
+docker tag llama-server:stable-YYYY-MM-DD llama-server:latest
+
+# 2. Restore the previous docker-compose.yml
+cp compose-backup/docker-compose-YYYY-MM-DD-pre-update.yml docker-compose.yml
+
+# 3. Restore the previous source (if source was modified)
+cd ~/llmaCPP/source
+git checkout $(cat .backup_head | awk '{print $1}')
+
+# 4. Restart with the old config
+cd ~/llmaCPP
+docker compose up -d --force-recreate llama-server llama-server-mini
+
+# 5. Verify
+sleep 15
+echo "Primary:   $(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health)"
+echo "Secondary: $(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/health)"
+nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
 ```
+
+**If the source directory is completely broken** (uncommitted changes, bad
+merge state):
+
+```bash
+cd ~/llmaCPP/source
+# Discard all uncommitted changes and go back to the known-good commit
+git checkout -- .
+git checkout turboquant-merged-2026-07-06
+
+# If .backup_head exists, use that commit instead
+if [ -f .backup_head ]; then
+  git checkout $(cat .backup_head | awk '{print $1}')
+fi
+```
+
+**If the Docker image wasn't tagged** before the bad build:
+
+```bash
+# List images by creation date to find the previous one
+docker images llama-server --format "table {{.Tag}}	{{.CreatedAt}}	{{.Size}}"
+
+# If a release tag exists from a previous deploy, use that:
+docker tag llama-server:release-YYYY-MM-DD llama-server:latest
+
+# Worst case: rebuild from the known-good source commit
+docker build --no-cache \
+  --build-arg CUDA_DOCKER_ARCH="60;61" \
+  -f .devops/cuda.Dockerfile \
+  --target server \
+  -t llama-server:latest .
+```
+
+---
 
 ### Known router-mode flags that crash the parent process
 
@@ -453,24 +855,206 @@ the docker-compose `command:`:
 - `--cache-type-k` / `--cache-type-v`
 - `--flash-attn` (though it works, prefer INI)
 
-### Performance tip: faster Docker builds
+---
+
+## When to Update — Decision Framework
+
+Not every upstream or fork change is worth merging. This framework helps you
+decide whether to invest time in an update, wait, or skip it entirely.
+
+Use this **before** starting the Update Protocol (Step 0).
+
+---
+
+### Three Questions to Ask
+
+#### Q1: Does the new code fix a problem you actually have?
+
+| If you're considering... | Ask yourself |
+|---|---|
+| A new model architecture | Do you have a GGUF of this model you want to run? |
+| A performance improvement | Is this bottleneck visible in your workloads? (e.g., prompt processing speed on P100) |
+| A bug fix | Are you hitting this bug? (check server logs, issue tracker) |
+| A new CLI flag / feature | Do you need this feature? (e.g., MTP, new cache type) |
+
+**Rule of thumb:** If you weren't looking for it before you saw the commit
+message, you probably don't need it right now.
+
+#### Q2: What is the risk of breakage?
+
+Evaluate the diff against your known regressions:
 
 ```bash
 cd ~/llmaCPP/source
-docker build \
-  --build-arg CUDA_DOCKER_ARCH="60;61" \
-  -f .devops/cuda.Dockerfile \
-  --target server \
-  -t llama-server:latest .
+
+# Quick risk scan: count files changed in high-risk areas
+high_risk=0
+for f in ggml/src/ggml-alloc.c ggml/src/ggml-cuda/ src/llama-kv-cache.cpp \
+         common/arg.cpp tools/server/server.cpp; do
+  changes=$(git diff --stat turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache -- "$f" 2>/dev/null | tail -1 | grep -oP '\\d+(?= insertion)' || echo 0)
+  high_risk=$((high_risk + changes))
+done
+
+if [ "$high_risk" -gt 200 ]; then
+  echo "⚠️  High-risk: $high_risk lines changed in critical areas"
+  echo "   Expect VRAM shifts, CLI flag changes, or allocator differences."
+else
+  echo "✅ Low-risk: $high_risk lines changed in critical areas"
+fi
+```
+
+**Risk levels:**
+
+| Risk level | Lines changed in critical areas | Decision |
+|---|---|---|
+| **Low** | 0–50 | Safe to merge, quick test |
+| **Medium** | 50–200 | Merge cautiously, run full VRAM dry-run (Step 7) |
+| **High** | 200–500+ | Postpone unless you need a specific feature |
+| **Critical** | CUDA MMQ refactor, allocator rewrite | Do not merge — wait for TurboQuant fork to re-anchor |
+
+#### Q3: Has the TurboQuant fork author re-anchored to a newer upstream?
+
+This is the most important leading indicator. TurboQuant is a downstream fork
+of llama.cpp. If the TurboQuant maintainer has explicitly re-anchored their
+work to a newer upstream commit, that's the safest time to sync — they've
+already done the hard work of resolving upstream conflicts.
+
+```bash
+cd ~/llmaCPP/source
+
+# Check if the fork has moved upstream
+fork_base=$(git merge-base origin/master atomic/feature/turboquant-kv-cache 2>/dev/null || echo "unknown")
+echo "Fork's upstream anchor: $(git log -1 --oneline $fork_base 2>/dev/null || echo 'unknown')"
+
+# Compare to your current anchor
+your_base=$(git log -1 --oneline turboquant-merged-2026-07-06 2>/dev/null | head -1)
+echo "Your current anchor:    $your_base"
+
+# If fork has a newer anchor, it's safer to sync
+```
+
+**Good time to update:** The TurboQuant author has released a new version or
+merged upstream, explicitly noting the upstream commit they anchored to.
+
+**Bad time to update:** You're trying to merge upstream into TurboQuant
+yourself without the fork author's groundwork.
+
+---
+
+### Decision Matrix
+
+| Q1 (Need it?) | Q2 (Risk?) | Q3 (Fork anchored?) | Verdict |
+|---|---|---|---|
+| ✅ Yes | 🟢 Low | ✅ Yes | **Go** — follow full Update Protocol |
+| ✅ Yes | 🟢 Low | ❌ No | **Go** — low risk, fork anchor not critical |
+| ✅ Yes | 🟡 Medium | ✅ Yes | **Go cautiously** — run all VRAM dry-run tests |
+| ✅ Yes | 🟡 Medium | ❌ No | **Wait** — risk without fork anchor; cherry-pick if urgent |
+| ✅ Yes | 🔴 High | ✅ Yes | **Evaluate** — consider cherry-picking only what you need |
+| ✅ Yes | 🔴 High | ❌ No | **Postpone** — too risky without fork groundwork |
+| ❌ No | Any | Any | **Skip** — don't fix what isn't broken |
+| ❌ No | N/A | N/A | **Skip** — wait for a feature you actually need |
+
+---
+
+### What to Do While Waiting
+
+If the verdict is "wait" or "postpone", you're not stuck. You can:
+
+1. **Monitor the TurboQuant fork** for new releases or explicit re-anchoring:
+   ```bash
+   cd ~/llmaCPP/source
+   git fetch atomic --tags --force
+   git log --oneline turboquant-merged-2026-07-06..atomic/feature/turboquant-kv-cache | head -20
+   ```
+
+2. **Track upstream llama.cpp releases** for features that might eventually
+   land in TurboQuant:
+   ```bash
+   cd ~/llmaCPP/source
+   git fetch origin --tags --force
+   git tag -l 'b*' --sort=-version:refname | head -10
+   ```
+
+3. **Cherry-pick only if you need a specific fix** — don't merge the whole
+   branch. Use the cherry-pick method in the Update Protocol (Step 3).
+
+4. **Periodically run the VRAM baseline** to make sure your current setup
+   hasn't drifted (e.g., after Docker/Kernel updates):
+   ```bash
+   nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+   ```
+
+---
+
+### Signals That It IS Time to Update
+
+Watch for these triggers that override the "wait" verdict:
+
+| Signal | Action |
+|---|---|
+| A model you want requires a newer llama.cpp architecture | Full merge, test thoroughly |
+| TurboQuant author releases a new tag with changelog | Full merge, run all tests |
+| A security fix lands in upstream llama.cpp | Cherry-pick just the fix |
+| Your current setup breaks (e.g., host CUDA driver update) | Full merge as last resort |
+| TurboQuant's KV cache compression gets measurably better for your workload | Full merge, benchmark before/after |
+| You've been on the same baseline for >6 months | Consider a planned upgrade cycle |
+
+---
+
+### Record Your Decision
+
+When you decide to update (or not), log it here at the top of the file so
+future-you knows why:
+
+```markdown
+## Update Decision — YYYY-MM-DD
+
+**Assessment:** Update needed? (Yes/No/Wait)
+**Target:** upstream / turboquant / cherry-pick
+**Reason:** ...
+**Risk level:** Low / Medium / High
+**Result:** (filled in after update)
 ```
 
 ---
 
 ## References
 
+### Fork Lineage
+
+```
+Google DeepMind TurboQuant (ICLR 2026)
+  └─ AmesianX/TurboQuant — Reference implementation (92★)
+       └─ TheTom/llama-cpp-turboquant — Original drop-in fork
+            └─ AtomicBot-ai/atomic-llama-cpp-turboquant ← WE ARE HERE (312★, 42 forks)
+                 └─ turboquant-merged-2026-07-06 ← our custom merge branch
+```
+
+There are ~15 active TurboQuant llama.cpp forks. Ours is the largest actively
+maintained fork with router mode support, Gemma 4 MTP, and Qwen NextN.
+
+| Fork | Stars | Focus |
+|---|---|---|
+| **AtomicBot-ai/atomic-llama-cpp-turboquant** | **312** ← ours | MTP + NextN + router mode + Gemma 4 |
+| spiritbuun/buun-llama-cpp | 719 | General TurboQuant, most starred |
+| BoFan-tunning/llama.cpp-MTP-TurboQuant | 143 | MTP-focused |
+| Indras-Mirror/llama.cpp-turboq-mtp | 92 | Fused TBQ4 Flash Attention + MTP |
+| AmesianX/TurboQuant | 92 | Original reference implementation |
+| domvox/llama.cpp-turboquant-hip | 56 | AMD ROCm port |
+| atomicmilkshake/llama-cpp-turboquant | 41 | TriAttention KV pruning |
+
+**Monitor for updates:** Check if the fork author re-anchored to upstream
+before attempting a merge (see "When to Update" section, Q3).
+
+---
+
+### Quick Reference
+
 | Resource | Path |
 |---|---|
 | Active branch | `source` → `turboquant-merged-2026-07-06` (commit `797cf14a2`) |
+| Our fork remote | `atomic` → `AtomicBot-ai/atomic-llama-cpp-turboquant` |
+| Upstream remote | `origin` → `ggml-org/llama.cpp` |
 | Old HEAD backup | `source/.backup_head` |
 | Compose config | `docker-compose.yml` |
 | Backup compose configs | `compose-backup/` |
