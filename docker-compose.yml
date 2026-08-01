@@ -114,3 +114,10 @@ services:
     depends_on:
       llama-server:
         condition: service_healthy
+    networks:
+      - default
+      - kokoro_default
+
+networks:
+  kokoro_default:
+    external: true
