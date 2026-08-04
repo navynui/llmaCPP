@@ -1,5 +1,6 @@
 models/
 source/
+source-thetom/
 benchmark_results/
 llm_bench.db
 nanbeige-llamacpp/

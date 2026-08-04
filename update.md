@@ -1,6 +1,45 @@
 # llmaCPP Source Update Log
 
-## Latest Update — 2026-07-26 (rollback to turboquant-merged-2026-07-06)
+## Latest Update — 2026-08-05 (PROMOTED: TheTom fork is the new workhorse)
+
+**Decision:** PROMOTED the `TheTom/llama-cpp-turboquant` fork as the running baseline.
+The experiment (Phase 0-3 in `docs/TheTom.md`) passed: benchmark net speed **+1.9% avg** across 10
+models, largest gains on MTP/qat models (agents-a1 +12.5%, gemma-4-e4b +11.0%), one
+regression (gemma-4-26b-UD −9.3%, MTP variant available @ score 91.0). Scores unchanged,
+VRAM ≤ atomic baseline at ctx=65536.
+
+### What changed
+
+| Item | Before | After |
+|---|---|---|
+| Image | `llama-server:latest` = `631b56ff03c4` (july6-fixed) | `latest` = `218fa988d87d` (TheTom `d0e2a8b64`) |
+| Source | `source/` @ `turboquant-merged-2026-07-06` (`797cf14a2`) | `source-thetom/` @ `d0e2a8b64` (`feature/turboquant-kv-cache`) |
+| Override | `docker-compose.override.yml` (image-only swap) | removed — `latest` is TheTom natively |
+| Snapshots | `stable-2026-07-26` (old) | `stable-2026-08-05` (TheTom, kept) |
+
+### Config changes vs previous baseline (docker-compose.yml + models.ini)
+
+- `--load-mode mlock` replaces deprecated `--no-mmap` + `--mlock` (both services)
+- **Multi-GPU split is per-preset, not global:** `models.ini` `[*]` sets single-GPU default
+  (`device = CUDA0`, `split-mode = none`); the 27B presets override to
+  `device = CUDA0,CUDA1` + `split-mode = layer` + `tensor-split = 5,1`
+- 27B (non-LOW) presets: `c = 32768` + `ubatch-size = 512`; LOW preset: `c = 65536`
+- **LOW 27B on split: 21.85 t/s @ 64K ctx** vs 8.6 t/s single-P100 spill baseline (+154%)
+
+### Key lessons
+
+- CLI command args BEAT INI preset values; only the `[*]` INI section is overridable per
+  model → defaults belong in `[*]`, not the compose `command:`
+- The 1060 (6 GB) cannot host the 27B split (4.8 GB) + mini E4B (5.5 GB) simultaneously;
+  coexistence works when primary runs single-GPU models
+- PCIe (PHB, no P2P) is the multi-GPU bottleneck; low util (39/56%) despite the split
+
+### Fate of `source-thetom/`
+
+KEPT as reference (the promoted binary was built from it). `stable-2026-07-26` retained
+for rollback; old `latest` (631b) is still on disk via that tag.
+
+## Previous Update — 2026-07-26 (rollback to turboquant-merged-2026-07-06)
 
 **Decision:** Rolled back from `turboquant-merged-2026-07-26` to the
 `turboquant-merged-2026-07-06` baseline after the July 26 merge introduced a
