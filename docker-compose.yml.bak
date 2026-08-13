@@ -18,7 +18,7 @@ services:
         reservations:
           devices:
           - driver: nvidia
-            device_ids: ['0']
+            device_ids: ['0', '1']
             capabilities: [gpu]
     environment:
     - LLAMA_SPEC_MAX_DRAFTING_SLOTS=1
@@ -32,11 +32,8 @@ services:
       --port 8080
       -np 1
       --flash-attn on
-      --cache-type-k turbo4
-      --cache-type-v turbo2
       --threads 7
-      --no-mmap
-      --mlock
+      --load-mode mlock
       --repeat-penalty 1.1
       --models-max 1
       --tools all
@@ -72,11 +69,8 @@ services:
         --port 8080
         -np 1
         --flash-attn on
-        --cache-type-k turbo4
-        --cache-type-v turbo2
         --threads 4
-        --no-mmap
-        --mlock
+        --load-mode mlock
         --repeat-penalty 1.1
         --models-max 1
         --tools all
@@ -87,7 +81,7 @@ services:
     restart: unless-stopped
     ports:
     - 8000:8000
-    - 8001:8001
+    - 8002:8001
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /home/nui/llmaCPP:/llm-server
@@ -118,3 +112,10 @@ services:
     depends_on:
       llama-server:
         condition: service_healthy
+    networks:
+      - default
+      - kokoro_default
+
+networks:
+  kokoro_default:
+    external: true

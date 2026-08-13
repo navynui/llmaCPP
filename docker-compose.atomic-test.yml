@@ -88,15 +88,14 @@ services:
     - /home/nui/llmaCPP/models:/models
     - /home/nui/llmaCPP/llm_bench.db:/app/llm_bench.db
     - /home/nui/llmaCPP/benchmark_results:/app/benchmark_results
-    - /home/nui/.hermes:/mnt/hermes
+    - /home/nui/.hermes:/mnt/hermos
     - /home/nui/.pi:/mnt/pi:rw
-    - /home/nui/.local/share/uv:/home/nui/.local/share/uv:ro
     - /home/nui/dev/ComfyUI/output:/comfyui-output
     - /home/nui/dev/llmMobile/PROMPTS:/app/PROMPTS
     - /home/nui/dashboard:/mnt/dashboard:rw
     environment:
     - LLM_COMPOSE_DIR=/llm-server
-    - LLM_PROJECT_NAME=llmacpp
+    - LLMA_PROJECT_NAME=llmacpp
     - COMFYUI_HOST=host.docker.internal:8188
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -104,11 +103,11 @@ services:
       resources:
         reservations:
           devices:
-          - driver: nvidia
-            device_ids: ['1']
-            capabilities:
-            - gpu
-            - utility
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities:
+              - gpu
+              - utility
     depends_on:
       llama-server:
         condition: service_healthy

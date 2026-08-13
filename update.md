@@ -34,10 +34,17 @@ VRAM ≤ atomic baseline at ctx=65536.
   coexistence works when primary runs single-GPU models
 - PCIe (PHB, no P2P) is the multi-GPU bottleneck; low util (39/56%) despite the split
 
-### Fate of `source-thetom/`
+### Fate of `source-thetom/` & Cleanup — 2026-08-12
 
-KEPT as reference (the promoted binary was built from it). `stable-2026-07-26` retained
-for rollback; old `latest` (631b) is still on disk via that tag.
+KEPT `source-thetom/` as reference (the promoted binary was built from it).
+
+- **Removed** `stable-2026-07-26` (image ID `631b56ff03c4`, july6-fixed) on 2026-08-12.
+  It was a dangling rollback anchor: no running container referenced it, nothing in
+  `docker-compose.yml` pointed to it, and TheTom (`218fa988d87d`) has been stable in
+  production for a week. Reclaimed ~7 GB of VRAM-backed image storage.
+- `source/` directory did not exist on disk (already removed); no action needed.
+- The branch it was built from (`turboquant-merged-2026-07-06`, commit `797cf14a2`)
+  remains recoverable from git remote history if a future rebuild is ever required.
 
 ## Previous Update — 2026-07-26 (rollback to turboquant-merged-2026-07-06)
 
@@ -1149,3 +1156,24 @@ from **1,079 commits behind** upstream to **fully caught up** (0 behind).
 | `tests/test-quantize-fns.cpp` | Added TQ3_1S to upstream format |
 | `tools/server/*` | Took upstream version (full compat) |
 | `tools/server/server.cpp` | Took upstream version (full compat) |
+## Update — 2026-08-13 (AtomicBot Test Phase)
+
+**Decision:** Experimental testing of AtomicBot fork on `llm-server-mini`.
+Applied a temporary test build to the secondary server for verification.
+
+### What changed
+
+| Item | Before | After |
+|---|---|---|
+| Image (`llm-server-mini`) | `llama-server:latest` (TheTom) | `llama-server:atomic-test` (AtomicBot) |
+| Config Status | Production baseline | Experimental test branch |
+
+### Test Results (GTX 1060 - llm-server-mini)
+
+**Model:** `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf`
+**Results:**
+- **MTP (Multi-Token Prediction):** Verified active (`speculative.types: "none,draft-mtp"`).
+- **Performance:** ~21.8 tokens/sec (Generation). Prompt processing was responsive (~142 t/s).
+- **Stability:** Successful inference response received; no VRAM OOM on 6GB card during the test.
+
+**Next Steps:** Evaluate performance vs. TheTom baseline and decide on permanent deployment of AtomicBot build if results warrant.
