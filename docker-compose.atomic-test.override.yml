@@ -1,3 +1,0 @@
-services:
-  llama-server-mini:
-    image: llama-server:atomic-test

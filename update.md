@@ -1,5 +1,15 @@
 # llmaCPP Source Update Log
 
+## Latest Update — 2026-08-15 (Image Consolidation)
+
+**Decision:** Removed all other llama.cpp server Docker images. Kept only `llama-server:thetom-aug14` (965971564434, 7.04GB) as the production baseline.
+
+- Deleted: `llama-server:stable-2026-08-05` (old TheTom July 26 baseline), `llama-server:latest` (previous TheTom builds), `llama-server:atomic-test` (AtomicBot test phase from 2026-08-13)
+- Retained: `llama-server:thetom-aug14` (965971564434, 7.04GB) — running on both `llama-server` (Port 8080) and `llama-server-mini` (Port 8081) services
+- docker-compose.yml updated to reference `llama-server:thetom-aug14` for both services
+- VRAM: consolidated image storage, no more duplicate images cluttering the environment
+- The previously promoted TheTom fork (`218fa988d87d`) and AtomicBot test build are no longer present
+
 ## Latest Update — 2026-08-05 (PROMOTED: TheTom fork is the new workhorse)
 
 **Decision:** PROMOTED the `TheTom/llama-cpp-turboquant` fork as the running baseline.

@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:latest
+    image: llama-server:thetom-aug14
     container_name: llm-server
     restart: unless-stopped
     cap_add:
@@ -43,7 +43,7 @@ services:
       timeout: 5s
       retries: 5
   llama-server-mini:
-      image: llama-server:latest
+      image: llama-server:thetom-aug14
       container_name: llm-server-mini
       restart: unless-stopped
       cap_add:
