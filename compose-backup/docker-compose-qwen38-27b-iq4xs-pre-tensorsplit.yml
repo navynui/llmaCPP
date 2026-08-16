@@ -32,7 +32,7 @@ services:
       --port 8080
       -np 1
       --flash-attn on
-      --threads 8
+      --threads 7
       --load-mode mlock
       --repeat-penalty 1.1
       --models-max 1
