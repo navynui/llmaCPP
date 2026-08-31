@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:atomic-aug22
+    image: llama-server:thetom-aug29
     container_name: llm-server
     restart: unless-stopped
     cap_add:
