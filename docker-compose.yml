@@ -100,15 +100,6 @@ services:
     - COMFYUI_HOST=host.docker.internal:8188
     extra_hosts:
     - host.docker.internal:host-gateway
-    deploy:
-      resources:
-        reservations:
-          devices:
-          - driver: nvidia
-            device_ids: ['1']
-            capabilities:
-            - gpu
-            - utility
     depends_on:
       llama-server:
         condition: service_healthy
