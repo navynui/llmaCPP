@@ -91,13 +91,22 @@ fi
 # ── Step 4: Post-merge audits + LFM2 DSpark patch ───────────────────────────
 log "Step 4: post-merge audit"
 
-# audit 1: fattn.cu brace balance (update.md §Step 4)
+# audit 1: fattn.cu brace + preprocessor balance (update.md §Step 4)
+# NOTE: the old check used a hardcoded line range (NR 38-118). Upstream prepended
+# ~2,400 lines of kv-stream code to fattn.cu at the 2026-10-18 pull (ca28b4bc0),
+# so that range now lands inside struct definitions and reports a false mismatch.
+# Whole-file counts are rewrite-proof; still catches a botched manual merge.
 if [[ -f "$SRC/ggml/src/ggml-cuda/fattn.cu" ]]; then
-  OPEN=$(awk 'NR>=38 && NR<118' "$SRC/ggml/src/ggml-cuda/fattn.cu" | grep -o '{' | wc -l)
-  CLOSE=$(awk 'NR>=38 && NR<118' "$SRC/ggml/src/ggml-cuda/fattn.cu" | grep -o '}' | wc -l)
+  OPEN=$(grep -o '{' "$SRC/ggml/src/ggml-cuda/fattn.cu" | wc -l)
+  CLOSE=$(grep -o '}' "$SRC/ggml/src/ggml-cuda/fattn.cu" | wc -l)
   if [[ "$OPEN" -ne "$CLOSE" ]]; then
     die "fattn.cu brace mismatch: $OPEN open vs $CLOSE close (see update.md fattn.cu fix)"
-  else log "  ✓ fattn.cu braces $OPEN==$CLOSE"; fi
+  else log "  ✓ fattn.cu braces $OPEN==$CLOSE (whole file)"; fi
+  IFN=$(grep -c '^[[:space:]]*#[[:space:]]*if' "$SRC/ggml/src/ggml-cuda/fattn.cu")
+  ENDN=$(grep -c '^[[:space:]]*#[[:space:]]*endif' "$SRC/ggml/src/ggml-cuda/fattn.cu")
+  if [[ "$IFN" -ne "$ENDN" ]]; then
+    die "fattn.cu #if/#endif mismatch: $IFN vs $ENDN (preprocessor broken by a merge?)"
+  else log "  ✓ fattn.cu #if/#endif $IFN==$ENDN"; fi
 else warn "fattn.cu not found — skip brace audit"; fi
 
 # audit 2: TURBO type_traits

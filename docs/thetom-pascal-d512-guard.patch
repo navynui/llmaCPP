@@ -1,0 +1,120 @@
+diff --git a/ggml/src/ggml-cuda/CMakeLists.txt b/ggml/src/ggml-cuda/CMakeLists.txt
+index 403babb87..5bb54b845 100644
+--- a/ggml/src/ggml-cuda/CMakeLists.txt
++++ b/ggml/src/ggml-cuda/CMakeLists.txt
+@@ -99,6 +99,36 @@ if (CUDAToolkit_FOUND)
+     endif()
+     message(STATUS "Using CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} CMAKE_CUDA_ARCHITECTURES_NATIVE=${CMAKE_CUDA_ARCHITECTURES_NATIVE}")
+ 
++    # Pascal (sm_60/sm_61) allows 48 KB shared memory per block but the D=512
++    # fattn-vec kernels with turbo V need ~65 KB and fail in ptxas. Skip them
++    # when all target archs predate sm_70. D=512 decode then uses TILE.
++    set(_ggml_cuda_max_arch 0)
++    foreach(_arch ${CMAKE_CUDA_ARCHITECTURES})
++        if (_arch MATCHES "^[0-9]+")
++            string(REGEX MATCH "^[0-9]+" _arch_num "${_arch}")
++            if (_arch_num GREATER _ggml_cuda_max_arch)
++                set(_ggml_cuda_max_arch ${_arch_num})
++            endif()
++        endif()
++    endforeach()
++    if (_ggml_cuda_max_arch GREATER 0 AND _ggml_cuda_max_arch LESS 70)
++        add_compile_definitions(GGML_CUDA_NO_D512_TURBO_VEC)
++    endif()
++    # Mixed old+new archs (e.g. 60;80) keep D512 turbo and still fail ptxas
++    # for sm_60. Build Pascal (60;61) apart from newer archs.
++    set(_ggml_cuda_min_arch 999)
++    foreach(_arch ${CMAKE_CUDA_ARCHITECTURES})
++        if (_arch MATCHES "^[0-9]+")
++            string(REGEX MATCH "^[0-9]+" _arch_num "${_arch}")
++            if (_arch_num LESS _ggml_cuda_min_arch)
++                set(_ggml_cuda_min_arch ${_arch_num})
++            endif()
++        endif()
++    endforeach()
++    if (_ggml_cuda_min_arch LESS 70 AND _ggml_cuda_max_arch GREATER_EQUAL 70)
++        message(WARNING "CUDA archs span Pascal and newer GPUs, D=512 turbo VEC will fail ptxas on sm_60/sm_61. Build 60;61 separately.")
++    endif()
++
+     file(GLOB   GGML_HEADERS_CUDA "*.cuh")
+     list(APPEND GGML_HEADERS_CUDA "../../include/ggml-cuda.h")
+ 
+diff --git a/ggml/src/ggml-cuda/fattn-vec.cuh b/ggml/src/ggml-cuda/fattn-vec.cuh
+index 680fd1290..6ac9a66f2 100644
+--- a/ggml/src/ggml-cuda/fattn-vec.cuh
++++ b/ggml/src/ggml-cuda/fattn-vec.cuh
+@@ -980,6 +980,9 @@ extern DECL_FATTN_VEC_CASE(256, GGML_TYPE_TURBO2_0, GGML_TYPE_TURBO4_0);
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_F16);
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_Q8_0);
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_BF16);
++// Turbo V at D=512 needs ~65 KB shared memory, over the 48 KB Pascal limit.
++#ifndef GGML_CUDA_NO_D512_TURBO_VEC
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0);
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0);
+ extern DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0);
++#endif // GGML_CUDA_NO_D512_TURBO_VEC
+diff --git a/ggml/src/ggml-cuda/fattn.cu b/ggml/src/ggml-cuda/fattn.cu
+index 5c614a9ff..04c50b170 100644
+--- a/ggml/src/ggml-cuda/fattn.cu
++++ b/ggml/src/ggml-cuda/fattn.cu
+@@ -507,9 +507,12 @@ static void ggml_cuda_flash_attn_ext_vec(ggml_backend_cuda_context & ctx, ggml_t
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_F16)
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_Q8_0)
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_BF16)
++    // Turbo V at D=512 is skipped on pre-sm_70, it exceeds shared memory.
++#ifndef GGML_CUDA_NO_D512_TURBO_VEC
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0)
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0)
+     FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0)
++#endif // GGML_CUDA_NO_D512_TURBO_VEC
+ 
+ #ifdef GGML_CUDA_FA_ALL_QUANTS
+     FATTN_VEC_CASES_ALL_D(GGML_TYPE_F16,  GGML_TYPE_F16)
+diff --git a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo2_0.cu b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo2_0.cu
+index a93be5669..9b25e7232 100644
+--- a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo2_0.cu
++++ b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo2_0.cu
+@@ -5,4 +5,7 @@
+ DECL_FATTN_VEC_CASE( 64, GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0);
+ DECL_FATTN_VEC_CASE(128, GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0);
+ DECL_FATTN_VEC_CASE(256, GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0);
++// D=512 turbo V needs ~65 KB shared memory, over the 48 KB Pascal limit.
++#ifndef GGML_CUDA_NO_D512_TURBO_VEC
+ DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO2_0);
++#endif // GGML_CUDA_NO_D512_TURBO_VEC
+diff --git a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo3_0.cu b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo3_0.cu
+index 3c806c2a4..f94950acc 100644
+--- a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo3_0.cu
++++ b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo3_0.cu
+@@ -5,4 +5,7 @@
+ DECL_FATTN_VEC_CASE( 64, GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0);
+ DECL_FATTN_VEC_CASE(128, GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0);
+ DECL_FATTN_VEC_CASE(256, GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0);
++// D=512 turbo V needs ~65 KB shared memory, over the 48 KB Pascal limit.
++#ifndef GGML_CUDA_NO_D512_TURBO_VEC
+ DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO3_0);
++#endif // GGML_CUDA_NO_D512_TURBO_VEC
+diff --git a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo4_0.cu b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo4_0.cu
+index 180902f8c..8d803898a 100644
+--- a/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo4_0.cu
++++ b/ggml/src/ggml-cuda/template-instances/fattn-vec-instance-q8_0-turbo4_0.cu
+@@ -5,4 +5,7 @@
+ DECL_FATTN_VEC_CASE( 64, GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0);
+ DECL_FATTN_VEC_CASE(128, GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0);
+ DECL_FATTN_VEC_CASE(256, GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0);
++// D=512 turbo V needs ~65 KB shared memory, over the 48 KB Pascal limit.
++#ifndef GGML_CUDA_NO_D512_TURBO_VEC
+ DECL_FATTN_VEC_CASE_D512(GGML_TYPE_Q8_0, GGML_TYPE_TURBO4_0);
++#endif // GGML_CUDA_NO_D512_TURBO_VEC
+diff --git a/src/models/lfm2.cpp b/src/models/lfm2.cpp
+index 70e837d6e..f0448e4e6 100644
+--- a/src/models/lfm2.cpp
++++ b/src/models/lfm2.cpp
+@@ -242,6 +242,7 @@ llama_model_lfm2::graph<iswa>::graph(const llama_model & model, const llm_graph_
+     ggml_tensor * inp_out_ids = build_inp_out_ids();
+ 
+     for (int il = 0; il < n_layer; ++il) {
++        res->t_layer_inp[il] = cur;
+         const bool is_moe_layer = il >= static_cast<int>(hparams.n_layer_dense_lead);
+ 
+         auto * prev_cur = cur;
