@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:thetom-oct18
+    image: llama-server:thetom-oct29
     container_name: llm-server
     restart: unless-stopped
     cap_add:
@@ -43,7 +43,7 @@ services:
       timeout: 5s
       retries: 5
   llama-server-mini:
-      image: llama-server:thetom-oct18   # 2026-10-18 build @ ca28b4bc0 — mini (GTX 1060) only; primary stays thetom-sep20
+      image: llama-server:thetom-oct29
       container_name: llm-server-mini
       restart: unless-stopped
       cap_add:
