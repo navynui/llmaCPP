@@ -2,6 +2,7 @@ models/
 source/
 source-thetom/
 source-atomic/
+source-kmic-68/
 benchmark_results/
 llm_bench.db
 nanbeige-llamacpp/
