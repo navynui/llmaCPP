@@ -6,7 +6,7 @@
 |---|---|
 | Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `7461904db` |
 | Secondary source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
-| Primary image | `llama-server:kmic-p100-2026-10-31` |
+| Primary image | `llama-server:kmic-p100-2026-10-31-gdnfix` |
 | Secondary image | `llama-server:thetom-oct29` |
 | Rollback anchor | `llama-server:stable-2026-10-31` (TheTom `thetom-oct29`) |
 | Primary | `llama-server` → `llm-server`, port 8080, GPU 0 (P100) |
@@ -83,6 +83,33 @@ docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
 
 ---
 
+## Update — 2026-10-31 (Kmic fused-GDN fix → `kmic-p100-2026-10-31-gdnfix`)
+
+- `agents-a1-IQ4_XS-MTP-graft-headQ6.gguf` (arch `qwen35moe`, 256 experts,
+  SSM/Gated Delta Net, 19 GiB) crashed on the first Kmic image during the
+  warmup decode: `CUDA error: an illegal memory access` in
+  `ggml_cuda_op_gated_delta_net_fused_cache`.
+- Cause: the P100 fork forces `cparams.fused_gdn_ar/ch = true` and sets
+  `auto_fgdn = false`, so the resolver never disables the fused GDN. The
+  fused-cache kernel is not valid on sm_60 for this model.
+- Fix in `source-kmic-68/src/llama-context.cpp`: disable fused GDN only for
+  `LLM_ARCH_QWEN35MOE`; `qwen35` (e.g. Qwen3.5-9B) and other arches keep the
+  tuned path. `script/build-kmic.sh` applies this guard automatically.
+- Rebuilt as `llama-server:kmic-p100-2026-10-31-gdnfix` (same commit
+  `7461904db`, build 12323). Old Kmic image remains as
+  `llama-server:kmic-p100-2026-10-31` for rollback.
+
+  ```bash
+  ./script/build-kmic.sh --tag llama-server:kmic-p100-2026-10-31-gdnfix --yes
+  ```
+- Verified on the P100: model loads with `-ngl -1 --fit on`, ctx 30208,
+  mmproj, and MTP; peak VRAM ~15.3 GiB; 16-token reply in ~250 ms decode;
+  MTP draft acceptance 1.00 (10/10, mean len 3.0).
+- Qwen3.5-9B (dense `qwen35`) still loads and runs with fused GDN enabled.
+- Pre-fix compose backup: `compose-backup/docker-compose-2026-10-31-pre-kmic-125951.yml`.
+
+---
+
 ## Current Config
 
 Both servers run router mode with `--models-preset`, `--flash-attn on`,
@@ -138,6 +165,10 @@ Secondary (`modelg.ini`, TheTom) is the same except
 11. **Kmic has no TurboQuant.** Use `q4_0`/`q8_0`/`f16`; `turbo*` throws.
 12. **`<algorithm>` patch:** `source-kmic-68/src/llama-context.cpp` needs the
     include on GCC 14. `script/build-kmic.sh` adds it and forces `--no-cache`.
+13. **Qwen3.5-MoE + fused GDN on sm_60:** the fused-cache kernel faults
+    (`ggml_cuda_op_gated_delta_net_fused_cache`). `script/build-kmic.sh`
+    disables fused GDN for `LLM_ARCH_QWEN35MOE` only. Do not remove that guard
+    without testing `agents-a1-IQ4_XS-MTP-graft-headQ6.gguf`.
 
 ---
 
@@ -188,3 +219,4 @@ docker compose up -d --force-recreate llama-server llama-server-mini
 | 2026-10-18 | `thetom-oct18` from `ca28b4bc0` |
 | 2026-10-29 | `thetom-oct29` from `643956891` (turbo5/6, Spark 2.5) |
 | 2026-10-31 | Primary → Kmic-68 `7461904db` (`kmic-p100-2026-10-31`), q4_0 KV; ~2.1x prefill / ~1.6x decode vs TheTom on Swift-27B @ 64k |
+| 2026-10-31 | Kmic fused-GDN guard → `kmic-p100-2026-10-31-gdnfix`; qwen35moe agents-a1 now runs on P100 |

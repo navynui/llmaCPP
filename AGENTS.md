@@ -8,7 +8,7 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 
 `llmaCPP` is a **personal Docker deployment stack**. It orchestrates:
 
-1. **`llama-server`** — Primary llama.cpp inference container on GPU 0 (Tesla P100, Port `8080`), image `llama-server:kmic-p100-2026-10-31`.
+1. **`llama-server`** — Primary llama.cpp inference container on GPU 0 (Tesla P100, Port `8080`), image `llama-server:kmic-p100-2026-10-31-gdnfix`.
 2. **`llama-server-mini`** — Secondary llama.cpp inference container on GPU 1 (GTX 1060, Port `8081`), image `llama-server:thetom-oct29`.
 3. **`llm-mobile`** — Web UI for server control, chat, benchmarking, and ComfyUI gateway (Port `8000`).
 4. **`comfyUI`** — Image generation container (Port `8188`) integrated via `llm-mobile`.
@@ -16,7 +16,7 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything else (`source-kmic-68/`, `source-thetom/`, `models/`, `compose-backup/`, `script/`) is supporting material.
 
 **Runtime builds (two forks):**
-- **Primary — Kmic-68 P100 fork** (`source-kmic-68/` @ `p100-optimizations`, `7461904db`): P100/sm_60-tuned CUDA kernels, built **sm_60-only**. No TurboQuant; use `q4_0` KV. Router mode and MTP are supported. A/B on Swift-1.5-27B @ 64k: ~2.1x prefill and ~1.6x decode vs TheTom.
+- **Primary — Kmic-68 P100 fork** (`source-kmic-68/` @ `p100-optimizations`, `7461904db`): P100/sm_60-tuned CUDA kernels, built **sm_60-only**. No TurboQuant; use `q4_0` KV. Router mode and MTP are supported. A/B on Swift-1.5-27B @ 64k: ~2.1x prefill and ~1.6x decode vs TheTom. The build patch disables the fused GDN path for `qwen35moe` (it faults on sm_60); other architectures keep the tuned path.
 - **Secondary — TheTom fork** (`source-thetom/` @ `feature/turboquant-kv-cache`, `643956891`): TurboQuant KV (`turbo4/3/2`), MTP, router mode, per-preset GPU split. Kept for the 1060 and as the primary rollback.
 
 ---
@@ -43,7 +43,7 @@ llmaCPP/
 
 ### 1. `docker-compose.yml` is the source of truth
 - All changes to container configs, runtime parameters, ports, or volumes happen **only** in `docker-compose.yml`.
-- Do **not** hand-edit files inside `source-kmic-68/` or `source-thetom/`. Both are git-ignored build sources. The only sanctioned source edit is the `<algorithm>` include patch that `script/build-kmic.sh` applies to `source-kmic-68/src/llama-context.cpp`; everything else belongs in the INI or compose file.
+- Do **not** hand-edit files inside `source-kmic-68/` or `source-thetom/`. Both are git-ignored build sources. The only sanctioned source edits are the `<algorithm>` include and the fused-GDN `qwen35moe` guard that `script/build-kmic.sh` applies to `source-kmic-68/src/llama-context.cpp`; everything else belongs in the INI or compose file.
 
 ### 2. Models directory is git-ignored
 - `models/` contains large binary GGUF files. Never suggest committing them.
@@ -54,7 +54,7 @@ The stack runs **two** independent `llama-server` containers:
 
 | Service | Container Name | Host Port | GPU | Image | INI Config | Role |
 |---|---|---|---|---|---|---|
-| `llama-server` | `llm-server` | 8080 | GPU 0 (Tesla P100) | `llama-server:kmic-p100-2026-10-31` | `models.ini` (q4_0) | Primary inference |
+| `llama-server` | `llm-server` | 8080 | GPU 0 (Tesla P100) | `llama-server:kmic-p100-2026-10-31-gdnfix` | `models.ini` (q4_0) | Primary inference |
 | `llama-server-mini` | `llm-server-mini` | 8081 | GPU 1 (GTX 1060) | `llama-server:thetom-oct29` | `modelg.ini` (turbo) | Secondary inference |
 
 Both share the `/models` volume. Each has its own `command:` section and model preset file.
@@ -166,6 +166,7 @@ docker compose up -d --force-recreate llama-server-mini # Restart secondary only
 - [ ] `LLM_PROJECT_NAME` in `llm-mobile` matches the Compose project name used when deploying
 - [ ] If adding a new GPU-heavy service, verify `device_ids` doesn't conflict with existing allocations
 - [ ] Primary uses the Kmic image with `q4_0` KV; `turbo*` is invalid there
+- [ ] `qwen35moe` models need the fused-GDN guard (applied by `script/build-kmic.sh`); without it they fault in `ggml_cuda_op_gated_delta_net_fused_cache` on sm_60
 - [ ] Primary image builds with `CUDA_DOCKER_ARCH=60` only (sm_60)
 - [ ] `source-kmic-68/` and `source-thetom/` are build sources — only the documented `script/build-*.sh` patches are allowed
 

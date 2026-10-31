@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:kmic-p100-2026-10-31
+    image: llama-server:kmic-p100-2026-10-31-gdnfix
     container_name: llm-server
     restart: unless-stopped
     cap_add:

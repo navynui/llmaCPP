@@ -73,8 +73,9 @@ else
   fi
 fi
 mkdir -p "$ROOT/compose-backup"
-cp "$COMPOSE" "$ROOT/compose-backup/docker-compose-$DATE-pre-kmic.yml"
-log "  compose backup: compose-backup/docker-compose-$DATE-pre-kmic.yml"
+BACKUP="$ROOT/compose-backup/docker-compose-$DATE-pre-kmic-$(date +%H%M%S).yml"
+cp "$COMPOSE" "$BACKUP"
+log "  compose backup: ${BACKUP#$ROOT/}"
 
 # GCC 14 libstdc++ no longer pulls <algorithm> in transitively. The fork uses
 # std::max<int64_t>({...}) in llama-context.cpp, so add the include explicitly.
@@ -88,6 +89,20 @@ if [[ -f "$CTX" ]] && ! grep -q '^#include <algorithm>' "$CTX"; then
   warn "forcing --no-cache because source was patched"
 else
   log "llama-context.cpp already has <algorithm>"
+fi
+
+# The P100 fused GDN CUDA path faults on Qwen3.5-MoE (illegal memory access in
+# ggml_cuda_op_gated_delta_net_fused_cache). Keep the tuned path for other
+# architectures and fall back to the non-fused path for qwen35moe.
+if [[ -f "$CTX" ]] && ! grep -q 'disable_fused_gdn' "$CTX"; then
+  log "patching llama-context.cpp: disable fused GDN for Qwen3.5-MoE"
+  [[ -f "$CTX.bak" ]] || cp "$CTX" "$CTX.bak"
+  perl -0pi -e 's/cparams\.fused_gdn_ar = true;\n    cparams\.fused_gdn_ch = true;\n    cparams\.auto_fgdn    = false;/const bool disable_fused_gdn = model.arch == LLM_ARCH_QWEN35MOE;\n    cparams.fused_gdn_ar = !disable_fused_gdn;\n    cparams.fused_gdn_ch = !disable_fused_gdn;\n    cparams.auto_fgdn    = false;/' "$CTX"
+  grep -q 'disable_fused_gdn' "$CTX" || die "patch failed: edit $CTX manually"
+  NOCACHE="--no-cache"
+  warn "forcing --no-cache because source was patched"
+else
+  log "llama-context.cpp already has the fused-GDN guard"
 fi
 
 if [[ $YES -eq 0 ]]; then
@@ -119,6 +134,6 @@ fi
 
 log "done: $TAG"
 echo "Rollback:"
-echo "  cp $ROOT/compose-backup/docker-compose-$DATE-pre-kmic.yml $COMPOSE"
+echo "  cp $BACKUP $COMPOSE"
 echo "  ( cd $ROOT && docker compose up -d --force-recreate llama-server )"
 echo "  # rollback anchor: $STABLE_TAG"
