@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:kmic-p100-2026-10-31-gdnfix
+    image: llama-server:kmic-p100-nov6
     container_name: llm-server
     restart: unless-stopped
     cap_add:
@@ -40,7 +40,7 @@ services:
       timeout: 5s
       retries: 5
   llama-server-mini:
-      image: llama-server:thetom-oct29
+      image: llama-server:stable-2026-10-31
       container_name: llm-server-mini
       restart: unless-stopped
       cap_add:

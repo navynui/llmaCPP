@@ -4,9 +4,9 @@
 
 | Item | Value |
 |---|---|
-| Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `7461904db` |
+| Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `83a7f0839` |
 | Secondary source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
-| Primary image | `llama-server:kmic-p100-2026-10-31-gdnfix` |
+| Primary image | `llama-server:kmic-p100-nov6` |
 | Secondary image | `llama-server:thetom-oct29` |
 | Rollback anchor | `llama-server:stable-2026-10-31` (TheTom `thetom-oct29`) |
 | Primary | `llama-server` → `llm-server`, port 8080, GPU 0 (P100) |
@@ -107,6 +107,19 @@ docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
   MTP draft acceptance 1.00 (10/10, mean len 3.0).
 - Qwen3.5-9B (dense `qwen35`) still loads and runs with fused GDN enabled.
 - Pre-fix compose backup: `compose-backup/docker-compose-2026-10-31-pre-kmic-125951.yml`.
+
+---
+
+## Update — 2026-11-06 (Kmic-68 pull + rebuild → `kmic-p100-nov6`)
+
+- Pulled `source-kmic-68`: `7461904db` → `83a7f0839` (15 commits ahead, 20 files changed).
+- Stashed local `src/llama-context.cpp` patches (`<algorithm>` include + fused-GDN `qwen35moe` guard); `<algorithm>` include was merged upstream (commit `be61e350a`) — redundant now; fused-GDN guard still local-only and re-applied by `script/build-kmic.sh`.
+- Notable upstream changes: MTP stop-rule chat tables (`edffc3fa2`, +6.6% t/s at T 0.3), MTP stop-rule tables for thinking-on (`715e36256`, +2.9%), MTP draft stop rule from traced acceptance (`2700dfda8`, +4.7%), GDN state gather skip fix for Qwen3.6-35B-A3B decode crash (`72a97be54`), sm_60 IQ2/IQ3 sign flip + grid fixes (`00b52988c`), various MMQ/MoE/fattn CUDA optimizations.
+- Built with `CUDA_DOCKER_ARCH=60` (sm_60 only), image `llama-server:kmic-p100-nov6`.
+- Verified `--version` → `0.7.0-dev (build 12338, commit 83a7f0839)`.
+- Deployed primary only (`docker compose up -d --force-recreate llama-server`); both services healthy (`/health` → 200). Mini stayed on `thetom-oct29`.
+- Backup: `compose-backup/docker-compose-2026-11-06-pre-kmic-131603.yml`.
+- Rollback anchor: `llama-server:stable-2026-11-06`.
 
 ---
 
@@ -220,3 +233,4 @@ docker compose up -d --force-recreate llama-server llama-server-mini
 | 2026-10-29 | `thetom-oct29` from `643956891` (turbo5/6, Spark 2.5) |
 | 2026-10-31 | Primary → Kmic-68 `7461904db` (`kmic-p100-2026-10-31`), q4_0 KV; ~2.1x prefill / ~1.6x decode vs TheTom on Swift-27B @ 64k |
 | 2026-10-31 | Kmic fused-GDN guard → `kmic-p100-2026-10-31-gdnfix`; qwen35moe agents-a1 now runs on P100 |
+| 2026-11-06 | Primary → Kmic-68 `83a7f0839` (`kmic-p100-nov6`); 15 upstream commits ahead of `7461904db`, MTP stop-rule tables +3–7% t/s, GDN crash fix, sm_60 IQ2/IQ3 grids; `<algorithm>` include merged upstream (fused-GDN guard still local-only) |
