@@ -7,7 +7,7 @@
 | Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `83a7f0839` |
 | Secondary source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
 | Primary image | `llama-server:kmic-p100-nov6` |
-| Secondary image | `llama-server:thetom-oct29` |
+| Secondary image | `llama-server:thetom-nov8` |
 | Rollback anchor | `llama-server:stable-2026-10-31` (TheTom `thetom-oct29`) |
 | Primary | `llama-server` → `llm-server`, port 8080, GPU 0 (P100) |
 | Secondary | `llama-server-mini` → `llm-server-mini`, port 8081, GPU 1 (1060) |
@@ -123,6 +123,19 @@ docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
 
 ---
 
+## Update — 2026-11-08 (TheTom rebuild `thetom-nov8`)
+
+- Pulled `source-thetom`: already up to date at `643956891` (no new commits on `feature/turboquant-kv-cache`).
+- Built `llama-server:thetom-nov8` (7.12 GB) with `CUDA_DOCKER_ARCH="60;61"` and `--no-cache` via `script/build-thetom.sh --tag llama-server:thetom-nov8 --no-cache --yes`.
+- Local uncommitted `src/models/lfm2.cpp` patch (`res->t_layer_inp[il] = cur;`) built in — fixes `GGML_ASSERT t_layer_inp null` crash for LFM2 + DSpark/DFlash draft sidecar.
+- TURBO symbol `nm -D` check returned empty (symbols statically linked in the binary, not exported from `.so`); smoke test confirms turbo4/turbo2 KV functional.
+- Deployed to `llama-server-mini` only; P100 primary stays on `kmic-p100-nov6`.
+- Smoke test: `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf` on port 8081, health 200, chat completion OK (MTP draft: 12 drafted, 3 accepted; ~159 t/s prompt, ~37 t/s decode).
+- Compose backup: `compose-backup/docker-compose-2026-11-08-pre-build.yml`.
+- Rollback anchor: `llama-server:stable-2026-10-31` (`thetom-oct29`) still valid.
+
+---
+
 ## Current Config
 
 Both servers run router mode with `--models-preset`, `--flash-attn on`,
@@ -234,3 +247,4 @@ docker compose up -d --force-recreate llama-server llama-server-mini
 | 2026-10-31 | Primary → Kmic-68 `7461904db` (`kmic-p100-2026-10-31`), q4_0 KV; ~2.1x prefill / ~1.6x decode vs TheTom on Swift-27B @ 64k |
 | 2026-10-31 | Kmic fused-GDN guard → `kmic-p100-2026-10-31-gdnfix`; qwen35moe agents-a1 now runs on P100 |
 | 2026-11-06 | Primary → Kmic-68 `83a7f0839` (`kmic-p100-nov6`); 15 upstream commits ahead of `7461904db`, MTP stop-rule tables +3–7% t/s, GDN crash fix, sm_60 IQ2/IQ3 grids; `<algorithm>` include merged upstream (fused-GDN guard still local-only) |
+| 2026-11-08 | `thetom-nov8` from `643956891` (lfm2.cpp DSpark `t_layer_inp` patch; arch 60;61; mini deployed) |
