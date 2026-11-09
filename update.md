@@ -1,14 +1,14 @@
 # llmaCPP Source Update Log
 
-## Current State — 2026-10-31
+## Current State — 2026-11-09
 
 | Item | Value |
 |---|---|
-| Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `83a7f0839` |
+| Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `bbad6fcfb` |
 | Secondary source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
-| Primary image | `llama-server:kmic-p100-nov6` |
+| Primary image | `llama-server:kmic-nov9` |
 | Secondary image | `llama-server:thetom-nov8` |
-| Rollback anchor | `llama-server:stable-2026-10-31` (TheTom `thetom-oct29`) |
+| Rollback anchor | `llama-server:stable-2026-11-09` |
 | Primary | `llama-server` → `llm-server`, port 8080, GPU 0 (P100) |
 | Secondary | `llama-server-mini` → `llm-server-mini`, port 8081, GPU 1 (1060) |
 | GPUs | 0 = Tesla P100 16 GB (sm_60), 1 = GTX 1060 6 GB (sm_61) |
@@ -19,6 +19,19 @@
 
 > `source/` no longer exists. `source-kmic-68/` builds the primary (P100) image;
 > `source-thetom/` builds the mini and is the primary rollback.
+
+---
+
+## Update — 2026-11-09 (Kmic-68 pull + rebuild → `kmic-nov9`)
+
+- Pulled `source-kmic-68`: `83a7f0839` → `bbad6fcfb` (324 commits ahead, 2026-10-24..11-06).
+- Local uncommitted `src/llama-context.cpp` fused-GDN `qwen35moe` guard preserved (not committed); `<algorithm>` include already upstream — `script/build-kmic.sh` skipped it and re-applied only the GDN guard, forcing `--no-cache`.
+- Notable upstream: OPTLOG 329 / upstream merge `ca89968a2` (gates, math attribution, speed); cuda GDN decode fusion (#18); sm_60 MoE expert GEMM work (q6_K experts, fp16 prompt processing, 128-row tiles); llama.cpp 0.9.0 / ggml 0.29.0; new models (Kimi-K3.1-Pro, LiquidAI LFM3 family, DSV4.1 flash, Metis-1.6, Clover, Ripple); server/UI/quantization/CI fixes.
+- Built with `CUDA_DOCKER_ARCH=60` (sm_60 only), image `llama-server:kmic-nov9`.
+- Verified `--version` → `0.9.0-dev (build 12662, commit bbad6fcfb)`.
+- Deployed primary only (`docker compose up -d --force-recreate llama-server`); both services healthy (`/health` → 200). Mini stayed on `thetom-nov8`.
+- Backup: `compose-backup/docker-compose-2026-11-09-pre-kmic-192929.yml`.
+- Rollback anchor: `llama-server:stable-2026-11-09`.
 
 ---
 
@@ -247,4 +260,5 @@ docker compose up -d --force-recreate llama-server llama-server-mini
 | 2026-10-31 | Primary → Kmic-68 `7461904db` (`kmic-p100-2026-10-31`), q4_0 KV; ~2.1x prefill / ~1.6x decode vs TheTom on Swift-27B @ 64k |
 | 2026-10-31 | Kmic fused-GDN guard → `kmic-p100-2026-10-31-gdnfix`; qwen35moe agents-a1 now runs on P100 |
 | 2026-11-06 | Primary → Kmic-68 `83a7f0839` (`kmic-p100-nov6`); 15 upstream commits ahead of `7461904db`, MTP stop-rule tables +3–7% t/s, GDN crash fix, sm_60 IQ2/IQ3 grids; `<algorithm>` include merged upstream (fused-GDN guard still local-only) |
+| 2026-11-09 | Primary → Kmic-68 `bbad6fcfb` (`kmic-nov9`); 324 upstream commits ahead of `83a7f0839`, OPTLOG 329 / upstream merge ca89968a2, GDN decode fusion, sm_60 MoE expert GEMM, llama.cpp 0.9.0 |
 | 2026-11-08 | `thetom-nov8` from `643956891` (lfm2.cpp DSpark `t_layer_inp` patch; arch 60;61; mini deployed) |

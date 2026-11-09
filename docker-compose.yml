@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:kmic-p100-nov6
+    image: llama-server:kmic-nov9
     container_name: llm-server
     restart: unless-stopped
     cap_add:

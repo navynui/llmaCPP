@@ -8,7 +8,7 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 
 `llmaCPP` is a **personal Docker deployment stack**. It orchestrates:
 
-1. **`llama-server`** — Primary llama.cpp inference container on GPU 0 (Tesla P100, Port `8080`), image `llama-server:kmic-p100-nov6`.
+1. **`llama-server`** — Primary llama.cpp inference container on GPU 0 (Tesla P100, Port `8080`), image `llama-server:kmic-nov9`.
 2. **`llama-server-mini`** — Secondary llama.cpp inference container on GPU 1 (GTX 1060, Port `8081`), image `llama-server:thetom-nov8`.
 3. **`llm-mobile`** — Web UI for server control, chat, benchmarking, and ComfyUI gateway (Port `8000`).
 4. **`comfyUI`** — Image generation container (Port `8188`) integrated via `llm-mobile`.
@@ -16,7 +16,7 @@ This file describes how AI coding agents (Copilot, Gemini, Claude, Cursor, etc.)
 The primary artifact is [`docker-compose.yml`](docker-compose.yml). Everything else (`source-kmic-68/`, `source-thetom/`, `models/`, `compose-backup/`, `script/`) is supporting material.
 
 **Runtime builds (two forks):**
-- **Primary — Kmic-68 P100 fork** (`source-kmic-68/` @ `p100-optimizations`, `83a7f0839`): P100/sm_60-tuned CUDA kernels, built **sm_60-only**. No TurboQuant; use `q4_0` KV. Router mode and MTP are supported. A/B on Swift-1.5-27B @ 64k: ~2.1x prefill and ~1.6x decode vs TheTom. The build patch disables the fused GDN path for `qwen35moe` (it faults on sm_60); other architectures keep the tuned path.
+- **Primary — Kmic-68 P100 fork** (`source-kmic-68/` @ `p100-optimizations`, `bbad6fcfb`): P100/sm_60-tuned CUDA kernels, built **sm_60-only**. No TurboQuant; use `q4_0` KV. Router mode and MTP are supported. A/B on Swift-1.5-27B @ 64k: ~2.1x prefill and ~1.6x decode vs TheTom. The build patch disables the fused GDN path for `qwen35moe` (it faults on sm_60); other architectures keep the tuned path.
 - **Secondary — TheTom fork** (`source-thetom/` @ `feature/turboquant-kv-cache`, `643956891`): TurboQuant KV (`turbo4/3/2`), MTP, router mode, per-preset GPU split. Kept for the 1060 and as the primary rollback.
 
 ---
@@ -54,7 +54,7 @@ The stack runs **two** independent `llama-server` containers:
 
 | Service | Container Name | Host Port | GPU | Image | INI Config | Role |
 |---|---|---|---|---|---|---|
-| `llama-server` | `llm-server` | 8080 | GPU 0 (Tesla P100) | `llama-server:kmic-p100-nov6` | `models.ini` (q4_0) | Primary inference |
+| `llama-server` | `llm-server` | 8080 | GPU 0 (Tesla P100) | `llama-server:kmic-nov9` | `models.ini` (q4_0) | Primary inference |
 | `llama-server-mini` | `llm-server-mini` | 8081 | GPU 1 (GTX 1060) | `llama-server:thetom-nov8` | `modelg.ini` (turbo) | Secondary inference |
 
 Both share the `/models` volume. Each has its own `command:` section and model preset file.
