@@ -126,6 +126,7 @@ When editing the `llm-mobile` service:
 | `LLM_COMPOSE_DIR` | Path **inside the container** to the llmaCPP directory (mapped via volume) |
 | `LLM_PROJECT_NAME` | Docker Compose project name used to control containers |
 | `COMFYUI_HOST` | Host:port for the ComfyUI image generation service |
+| `STRATA_API_KEY_FILE` | Path to Strata's API key (state dir is mounted read-only at `/run/strata-state`; key file is `api-key`) |
 
 ### 8. `compose-backup/` is read-only reference
 - Do **not** delete or overwrite files in `compose-backup/`.

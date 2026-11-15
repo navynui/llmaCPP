@@ -91,10 +91,12 @@ services:
     - /home/nui/dev/ComfyUI/output:/comfyui-output
     - /home/nui/dev/llmMobile/PROMPTS:/app/PROMPTS
     - /home/nui/dashboard:/mnt/dashboard:rw
+    - /home/nui/dev/strata/Strata-data/state:/run/strata-state:ro
     environment:
     - LLM_COMPOSE_DIR=/llm-server
     - LLM_PROJECT_NAME=llmacpp
     - COMFYUI_HOST=host.docker.internal:8188
+    - STRATA_API_KEY_FILE=/run/strata-state/api-key
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
