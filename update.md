@@ -1,24 +1,71 @@
 # llmaCPP Source Update Log
 
-## Current State — 2026-11-09
+## Current State — 2026-11-16
 
 | Item | Value |
 |---|---|
 | Primary source | `source-kmic-68/` @ `p100-optimizations`, commit `bbad6fcfb` |
-| Secondary source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
+| Secondary source | `source-ggml/` @ `master`, commit `1d2e880ba` (build 12436) |
+| Rollback source | `source-thetom/` @ `feature/turboquant-kv-cache`, commit `643956891` |
 | Primary image | `llama-server:kmic-nov9` |
-| Secondary image | `llama-server:thetom-nov8` |
-| Rollback anchor | `llama-server:stable-2026-11-09` |
+| Secondary image | `llama-server:ggml-nov16` |
+| Rollback image | `llama-server:thetom-nov8` |
+| Rollback anchor | `llama-server:stable-2026-11-16` (= `kmic-nov9`) |
 | Primary | `llama-server` → `llm-server`, port 8080, GPU 0 (P100) |
 | Secondary | `llama-server-mini` → `llm-server-mini`, port 8081, GPU 1 (1060) |
 | GPUs | 0 = Tesla P100 16 GB (sm_60), 1 = GTX 1060 6 GB (sm_61) |
 | Primary build arch | `CUDA_DOCKER_ARCH=60` (sm_60 only) |
 | Secondary build arch | `CUDA_DOCKER_ARCH="60;61"` |
 | Primary KV | `q4_0` / `q4_0` |
-| Secondary KV | `turbo4` / `turbo2` |
+| Secondary KV | `q4_0` / `q4_0` |
 
 > `source/` no longer exists. `source-kmic-68/` builds the primary (P100) image;
-> `source-thetom/` builds the mini and is the primary rollback.
+> `source-ggml/` builds the mini image; `source-thetom/` is the rollback.
+
+---
+
+## Update — 2026-11-16 (upstream ggml pull + build `ggml-nov16` → mini)
+
+- Cloned `ggml-org/llama.cpp` into `source-ggml/` (git-ignored) at `master`
+  `1d2e880ba` (build 12436). Chose `master` over the unmerged `pascal/*`
+  contributor branches: our GPUs are covered (CUDA CMake lists `60` = P100
+  FP16 intrinsics, `61` = Pascal `__dp4a`) and master carries recent sm_60
+  work, e.g. `1623d8ce4 cuda: always use MMVQ for MUL_MAT_ID on sm_60`.
+- Added `script/build-ggml.sh`; built with `CUDA_DOCKER_ARCH="60;61"`,
+  target `server` → `llama-server:ggml-nov16` (6.82 GB).
+- Verified `--version` → `1.0.0-dev (build 12436, commit 1d2e880ba)`.
+  The same image ran on both the P100 (sm_60) and GTX 1060 (sm_61).
+- Upstream CLI differences vs the forks: `--spec-draft-n-ubatch` (not
+  `--spec-draft-ubatch-size`), and `--tools all` on a non-loopback bind now
+  requires `--api-key` or `--allow-unauthenticated-tools`. The mini compose
+  command adds the latter for the trusted LAN.
+- A/B via `script/bench-image-ab.sh` (median of 2–3 runs, `/completion`
+  timings, `cache_prompt=false`, identical prompts/args):
+
+  | GPU | Model / ctx | Image | Prompt t/s | Decode t/s |
+  |---|---|---|---|---|
+  | P100 | Swift-1.5-27B / 64k, MTP | `kmic-nov9` | 211.6 | 32.2 |
+  | P100 | Swift-1.5-27B / 64k, MTP | `ggml-nov16` | 137.7 | 18.3 |
+  | P100 | gemma-4-12B / 32k, MTP | `kmic-nov9` | 538.8 | 70.6 |
+  | P100 | gemma-4-12B / 32k, MTP | `ggml-nov16` | 531.1 | 49.9 |
+  | 1060 | gemma-4-E4B / 131k, MTP | `thetom-nov8` (turbo4/2) | 516.7 | 86.2 |
+  | 1060 | gemma-4-E4B / 131k, MTP | `ggml-nov16` (q4_0) | **886.7** | **87.4** |
+  | 1060 | gemma-4-E4B / 16k, MTP | `thetom-nov8` (turbo4/2) | 561.9 | 88.7 |
+  | 1060 | gemma-4-E4B / 16k, MTP | `ggml-nov16` (q4_0) | **947.1** | 86.4 |
+  | 1060 | gemma-4-E4B / 16k, no spec | `thetom-nov8` (q4_0) | 560.2 | 30.3 |
+  | 1060 | gemma-4-E4B / 16k, no spec | `ggml-nov16` (q4_0) | **940.8** | 28.4 |
+
+  → Upstream loses to Kmic on the P100 (~1.5–1.8x decode on 27B, ~1.4x
+  decode on 12B; prefill is close on 12B and ~1.5x slower on 27B). On the
+  1060 it wins prefill (~1.7x) and, at the production 131k context, edge
+  decode (+1.4%); at 16k decode is ~3% slower.
+- Deployed **mini only**: `docker-compose.yml` mini image → `ggml-nov16`,
+  `models/modelg.ini` KV → `q4_0`/`q4_0`. Primary stays `kmic-nov9`.
+  Smoke test at 131k ctx: health 200, chat completion OK, 5,905 MiB used on
+  the 6 GB card.
+- Compose backups: `compose-backup/docker-compose-2026-11-16-pre-ggml-182518.yml`.
+  Rollback anchor: `llama-server:stable-2026-11-16` (= `kmic-nov9`).
+  Images `kmic-nov9`, `ggml-nov16`, `thetom-nov8` all retained.
 
 ---
 
@@ -153,6 +200,8 @@ docker build --build-arg CUDA_DOCKER_ARCH="60;61" \
 
 Both servers run router mode with `--models-preset`, `--flash-attn on`,
 `--load-mode mlock`, `-np 1`, `--models-max 1`, `--tools all`.
+The mini (upstream ggml) also passes `--allow-unauthenticated-tools` because
+upstream refuses `--tools all` on a non-loopback bind without an API key.
 Model-level flags live in the INI files, not `command:`.
 
 Primary (`models.ini`, Kmic) `[*]` defaults:
@@ -168,13 +217,14 @@ split-mode = none
 main-gpu = 0
 ```
 
-Secondary (`modelg.ini`, TheTom) is the same except
-`cache-type-k = turbo4`, `cache-type-v = turbo2`; no `device`/`split-mode`.
+Secondary (`modelg.ini`, ggml) uses the same `q4_0`/`q4_0` KV; no
+`device`/`split-mode`. The TheTom rollback uses `cache-type-k = turbo4`,
+`cache-type-v = turbo2`.
 
 - No preset currently splits across GPUs. To split, override
   `device = CUDA0,CUDA1` + `split-mode = layer` + `tensor-split` in that preset.
 - 27B split on the 1060 (~4.8 GiB) conflicts with mini E4B (~5.5 GiB): keep mini idle.
-- Kmic KV: `q4_0`, `q8_0`, `f16` (no turbo). TheTom KV:
+- Kmic and ggml KV: `q4_0`, `q8_0`, `f16` (no turbo). TheTom rollback KV:
   `turbo6/5/4/3/2` (best compression), `q4_0`…`f16` also available.
 
 ---
@@ -198,34 +248,41 @@ Secondary (`modelg.ini`, TheTom) is the same except
    `ggml/src/ggml-cuda/fattn.cu`. Missing traits = SIGSEGV on model load.
 8. **Check `GGML_OP_COUNT` / `RPC_PROTO_PATCH_VERSION`** after merges that add ops.
 9. **Verify arch:** `docker run --rm --entrypoint /app/llama-server IMG --version`.
-   The Kmic image is sm_60-only; TheTom is `60;61`.
+   The Kmic image is sm_60-only; ggml and TheTom are `60;61`.
 10. **Kmic build arch is `60` only.** `CUDA_DOCKER_ARCH="60;61"` compiles but
     silently disables the P100 tuning (`__CUDA_ARCH_LIST__ == 600`).
-11. **Kmic has no TurboQuant.** Use `q4_0`/`q8_0`/`f16`; `turbo*` throws.
+11. **Kmic and upstream ggml have no TurboQuant.** Use `q4_0`/`q8_0`/`f16`;
+    `turbo*` throws. Only TheTom supports `turbo*`.
 12. **`<algorithm>` patch:** `source-kmic-68/src/llama-context.cpp` needs the
     include on GCC 14. `script/build-kmic.sh` adds it and forces `--no-cache`.
 13. **Qwen3.5-MoE + fused GDN on sm_60:** the fused-cache kernel faults
     (`ggml_cuda_op_gated_delta_net_fused_cache`). `script/build-kmic.sh`
     disables fused GDN for `LLM_ARCH_QWEN35MOE` only. Do not remove that guard
     without testing `agents-a1-IQ4_XS-MTP-graft-headQ6.gguf`.
+14. **Upstream ggml tools security gate:** `--tools all` on a non-loopback
+    bind requires `--api-key` or `--allow-unauthenticated-tools`; otherwise
+    the server exits during setup. The mini passes the latter for the LAN.
+15. **Upstream draft-ubatch flag is `--spec-draft-n-ubatch`**, not the forks'
+    `--spec-draft-ubatch-size`.
 
 ---
 
 ## Update Protocol (condensed)
 
-0. **Decide which fork:** Kmic (`source-kmic-68/`, primary/P100) or TheTom
-   (`source-thetom/`, mini/rollback). Does it fix a problem you have? Is the
-   diff small in `ggml-alloc.c`, `ggml-cuda/`, `llama-kv-cache.cpp`, `arg.cpp`,
-   `server.cpp`? Has the fork re-anchored upstream? If not, skip.
+0. **Decide which build:** Kmic (`source-kmic-68/`, primary/P100), upstream
+   ggml (`source-ggml/`, mini/Pascal), or TheTom (`source-thetom/`, rollback).
+   Does it fix a problem you have? Is the diff small in `ggml-alloc.c`,
+   `ggml-cuda/`, `llama-kv-cache.cpp`, `arg.cpp`, `server.cpp`? Has the fork
+   re-anchored upstream? If not, skip.
 1. **Backup:** tag the running image, copy compose to `compose-backup/`,
    record `git log -1 --oneline` to `.backup_head`.
 2. **Fetch + diff** before merging; flag TURBO removals (TheTom) and OP_COUNT changes.
 3. **Pull/merge** in the matching source dir; TheTom: server files → theirs,
    TQ core → ours.
 4. **Audit symbols/braces** (see rule 7, TheTom).
-5. **Build** with the correct arch: Kmic `CUDA_DOCKER_ARCH=60`; TheTom
-   `"60;61"` (add `--no-cache` after merges). Prefer `script/build-kmic.sh` /
-   `script/build-thetom.sh`.
+5. **Build** with the correct arch: Kmic `CUDA_DOCKER_ARCH=60`; ggml and
+   TheTom `"60;61"` (add `--no-cache` after merges). Prefer
+   `script/build-kmic.sh` / `script/build-ggml.sh` / `script/build-thetom.sh`.
 6. **Smoke test** at small ctx, then the tightest model at full ctx.
 7. **Deploy only the affected service:** update its `image:` and
    `docker compose up -d --force-recreate <service>`, check `/health`, then
@@ -251,6 +308,7 @@ docker compose up -d --force-recreate llama-server llama-server-mini
 
 | Date | Event |
 |---|---|
+| 2026-11-16 | Mini → upstream ggml `1d2e880ba` (`ggml-nov16`, 60;61), `modelg.ini` → q4_0; beats TheTom ~1.7x prefill at 131k; primary stays `kmic-nov9` |
 | 2026-08-15 | Consolidated to `llama-server:thetom-aug14`; deleted older images |
 | 2026-08-05 | Promoted TheTom fork: +1.9% avg; per-preset multi-GPU split |
 | 2026-07-26 | July 26 merge caused P100 VRAM regression → rolled back to July 6 |

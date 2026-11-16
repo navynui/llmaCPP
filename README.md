@@ -15,7 +15,7 @@ The system consists of four main components:
 
 Both `llama-server` instances share the same `/models` volume but maintain separate model preset configurations and can run different models simultaneously on separate GPUs.
 
-The stack now runs on the **TheTom fork** (`llama-server:latest` = TheTom/llama-cpp-turboquant, source in `source-thetom/`), which adds TurboQuant KV cache (`turbo4/3/2`), MTP speculative decoding, router mode, and per-model GPU splitting.
+The primary runs the **Kmic-68 P100 fork** (`llama-server:kmic-nov9`, source in `source-kmic-68/`), which is tuned for sm_60 and supports MTP, router mode, and per-model GPU splitting. The mini runs **upstream ggml-org/llama.cpp** (`llama-server:ggml-nov16`, source in `source-ggml/`), built for sm_60 + sm_61 with MTP and router mode. The **TheTom fork** (`source-thetom/`, TurboQuant KV `turbo4/3/2`) is kept as the rollback image.
 
 ## Key Features
 
@@ -35,8 +35,10 @@ The stack now runs on the **TheTom fork** (`llama-server:latest` = TheTom/llama-
 - `models/`: GGUF model weights (git-ignored).
 - `models/models.ini`: Model preset config for primary server (includes per-preset GPU split for 27B family).
 - `models/modelg.ini`: Model preset config for secondary (mini) server.
-- `source-thetom/`: TheTom fork build source (git-ignored) — the image is built from here.
-- `source/`: Legacy llama.cpp upstream reference clone (git-ignored, no longer built).
+- `source-kmic-68/`: Kmic-68 P100 fork build source (git-ignored) — primary image.
+- `source-ggml/`: Upstream ggml-org llama.cpp build source (git-ignored) — mini image.
+- `source-thetom/`: TheTom fork build source (git-ignored) — rollback image.
+- `script/`: Build scripts (`build-kmic.sh`, `build-ggml.sh`, `build-thetom.sh`) and `bench-image-ab.sh`.
 - `compose-backup/`: Archived and experimental configurations.
 
 ## Quick Start
@@ -49,12 +51,13 @@ docker compose up -d
 ### Manage
 Access the **llm-mobile** UI at `http://localhost:8000` to control both LLM servers and interface with ComfyUI.
 
-### Build `llama-server`
-The image is built from the TheTom fork (`source-thetom/`):
+### Build the images
 ```bash
-cd source-thetom && docker build -f .devops/cuda.Dockerfile --target server -t llama-server:latest .
+./script/build-kmic.sh --tag llama-server:kmic-nov9      # primary, sm_60 only
+./script/build-ggml.sh --tag llama-server:ggml-nov16    # mini, sm_60 + sm_61
+./script/build-thetom.sh                                # rollback image
 ```
-(`source/` is the legacy upstream clone and is no longer used for builds.)
+The ggml script builds `source-ggml/` with `CUDA_DOCKER_ARCH="60;61"` and tags the image `llama-server:ggml-nov16`. The Kmic script builds sm_60 only so the P100 tuning stays enabled.
 
 ## Configuration Note
 
@@ -66,10 +69,10 @@ cd source-thetom && docker build -f .devops/cuda.Dockerfile --target server -t l
 ## Model INI Files
 
 ### Primary (`models/models.ini`)
-Used by `llama-server` on GPU 0 (Tesla P100).
+Used by `llama-server` on GPU 0 (Tesla P100). Use `q4_0` KV (Kmic has no TurboQuant).
 
 ### Secondary (`models/modelg.ini`)
-Used by `llama-server-mini` on GPU 1 (GTX 1060).
+Used by `llama-server-mini` on GPU 1 (GTX 1060). Use `q4_0` KV (upstream ggml has no TurboQuant; `turbo*` only exists in the TheTom rollback).
 Both follow the same INI format:
 ```ini
 [ModelName.gguf]
