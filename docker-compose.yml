@@ -34,13 +34,14 @@ services:
       --repeat-penalty 1.1
       --models-max 1
       --tools all
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
   llama-server-mini:
-      image: llama-server:ggml-nov16
+      image: llama-server:ggml-nov18
       container_name: llm-server-mini
       restart: unless-stopped
       cap_add:
