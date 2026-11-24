@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:ggml-nov23
+    image: llama-server:kmic-nov9
     container_name: llm-server
     restart: unless-stopped
     cap_add:
@@ -34,7 +34,6 @@ services:
       --repeat-penalty 1.1
       --models-max 1
       --tools all
-      --allow-unauthenticated-tools
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
