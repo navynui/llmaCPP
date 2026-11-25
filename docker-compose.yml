@@ -1,6 +1,6 @@
 services:
   llama-server:
-    image: llama-server:kmic-nov9
+    image: llama-server:kmic-nov25
     container_name: llm-server
     restart: unless-stopped
     cap_add:
@@ -41,7 +41,7 @@ services:
       timeout: 5s
       retries: 5
   llama-server-mini:
-      image: llama-server:ggml-nov23
+      image: llama-server:ggml-nov25
       container_name: llm-server-mini
       restart: unless-stopped
       cap_add:
